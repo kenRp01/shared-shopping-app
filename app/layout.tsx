@@ -15,7 +15,7 @@ const body = Noto_Sans_JP({
 });
 
 export const metadata: Metadata = {
-  title: "シェアショピ | Shareshopi",
+  title: "ShareShopi",
   description: "複数人で共有できる、無料運用前提の買い物リストアプリ",
 };
 

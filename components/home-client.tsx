@@ -29,10 +29,10 @@ export function HomeClient() {
       <div className="page-grid">
         <section className="panel landing-hero">
           <div>
-            <p className="eyebrow">Shareshopi</p>
+            <p className="eyebrow">ShareShopi</p>
             <h2>誰が入れたか、何が今日必要かを一目で分かる買い物アプリ</h2>
             <p className="lead-copy">
-              シェアショピは、同じリストを複数人で共有し、商品ごとの期限と追加者を見ながら、公開リンクでも確認できる構成です。
+              ShareShopi は、同じリストを複数人で共有し、商品ごとの期限と追加者を見ながら、公開リンクでも確認できる構成です。
             </p>
           </div>
           <div className="hero-actions">
@@ -93,7 +93,7 @@ export function HomeClient() {
       <section className="panel dashboard-hero">
         <div>
           <p className="eyebrow">Welcome</p>
-          <h2>{user.name}さんの共有リスト</h2>
+          <h2>{user.name}さんの ShareShopi リスト</h2>
           <p className="lead-copy">今日必要なもの、期限切れ、共有状態を上から順に見られるようにしています。</p>
         </div>
         <div className="summary-strip">

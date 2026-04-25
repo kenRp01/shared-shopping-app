@@ -1,5 +1,5 @@
 ---
-name: Shareshopi
+name: ShareShopi
 colors:
   primary: "#1B2A41"
   accent: "#F26B5B"
