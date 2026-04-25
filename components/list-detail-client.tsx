@@ -172,8 +172,9 @@ export function ListDetailClient({ listId, publicToken }: Props) {
             onClick={() => setActiveTab("pending")}
             role="tab"
             aria-selected={activeTab === "pending"}
+            aria-label="未購入"
           >
-            未購入
+            <ListIcon />
             <span>{pendingItems.length}</span>
           </button>
           <button
@@ -182,8 +183,9 @@ export function ListDetailClient({ listId, publicToken }: Props) {
             onClick={() => setActiveTab("purchased")}
             role="tab"
             aria-selected={activeTab === "purchased"}
+            aria-label="購入済み"
           >
-            購入済み
+            <CheckListIcon />
             <span>{purchasedItems.length}</span>
           </button>
         </div>
@@ -236,6 +238,25 @@ export function ListDetailClient({ listId, publicToken }: Props) {
         </div>
       </section>
     </div>
+  );
+}
+
+function ListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 7h10M9 12h10M9 17h10" />
+      <path d="M5 7h.01M5 12h.01M5 17h.01" />
+    </svg>
+  );
+}
+
+function CheckListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m4.5 7 1.8 1.8L9 6" />
+      <path d="m4.5 12 1.8 1.8L9 11" />
+      <path d="M11 7h9M11 12h9M11 17h9" />
+    </svg>
   );
 }
 
