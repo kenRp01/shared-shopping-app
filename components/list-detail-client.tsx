@@ -55,8 +55,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
 
   const pendingItems = snapshot?.items.filter((item) => item.status === "pending") ?? [];
   const purchasedItems = snapshot?.items.filter((item) => item.status === "purchased") ?? [];
-  const dueToday = pendingItems.filter((item) => item.dueState === "today");
-  const overdue = pendingItems.filter((item) => item.dueState === "overdue");
 
   if (!snapshot) {
     return (
@@ -164,21 +162,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
             ) : null}
           </div>
         )}
-      </section>
-
-      <section className="highlight-grid highlight-grid-compact">
-        <article className="summary-block accent">
-          <strong>{dueToday.length}</strong>
-          <span>今日の買い物</span>
-        </article>
-        <article className="summary-block warning">
-          <strong>{overdue.length}</strong>
-          <span>期限切れ</span>
-        </article>
-        <article className="summary-block neutral">
-          <strong>{purchasedItems.length}</strong>
-          <span>購入済み</span>
-        </article>
       </section>
 
       <section className="panel list-section-panel">
