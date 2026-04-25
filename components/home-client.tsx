@@ -26,9 +26,9 @@ export function HomeClient() {
 
   if (!user) {
     return (
-      <div className="page-grid">
-        <section className="panel landing-hero">
-          <div>
+      <div className="page-grid home-shell">
+        <section className="panel landing-hero landing-hero-compact">
+          <div className="hero-copy">
             <p className="eyebrow">ShareShopi</p>
             <h2>誰が入れたか、何が今日必要かを一目で分かる買い物アプリ</h2>
             <p className="lead-copy">
@@ -46,18 +46,18 @@ export function HomeClient() {
           </div>
         </section>
 
-        <section className="card-grid">
-          <article className="panel feature-panel">
+        <section className="card-grid feature-grid-compact">
+          <article className="panel feature-panel feature-panel-compact">
             <p className="eyebrow">Visual First</p>
             <h3>状態が色で見える</h3>
             <p>今日が期限、期限切れ、購入済みを色分けして、見落としを減らします。</p>
           </article>
-          <article className="panel feature-panel">
+          <article className="panel feature-panel feature-panel-compact">
             <p className="eyebrow">Shared Context</p>
             <h3>追加者がすぐ分かる</h3>
             <p>各商品に名前バッジが付き、誰が入れたか、誰が買ったかをその場で確認できます。</p>
           </article>
-          <article className="panel feature-panel">
+          <article className="panel feature-panel feature-panel-compact">
             <p className="eyebrow">Cloud Ready</p>
             <h3>無料構成を想定</h3>
             <p>{configured ? "Supabase 環境変数を検出しています。クラウド連携へ進めます。" : "ローカルデモで動作しつつ、Supabase/Resend連携用の設定も含めています。"}</p>
@@ -89,17 +89,17 @@ export function HomeClient() {
   const overdue = lists.reduce((sum, list) => sum + list.overdueCount, 0);
 
   return (
-    <div className="page-grid">
-      <section className="panel dashboard-hero">
-        <div>
-          <p className="eyebrow">Welcome</p>
-          <h2>{user.name}さんの ShareShopi リスト</h2>
-          <p className="lead-copy">今日必要なもの、期限切れ、共有状態を上から順に見られるようにしています。</p>
+    <div className="page-grid home-shell">
+      <section className="panel dashboard-hero dashboard-hero-compact">
+        <div className="hero-copy">
+          <p className="eyebrow">Today</p>
+          <h2>{user.name}さんの買い物一覧</h2>
+          <p className="lead-copy">今日買うものと期限切れだけ先に見て、そのままリストを開けるように整理しています。</p>
         </div>
-        <div className="summary-strip">
+        <div className="summary-strip summary-strip-tight">
           <article className="summary-block accent">
             <strong>{lists.length}</strong>
-            <span>参加中のリスト</span>
+            <span>リスト</span>
           </article>
           <article className="summary-block warning">
             <strong>{overdue}</strong>
@@ -112,17 +112,17 @@ export function HomeClient() {
         </div>
       </section>
 
-      <section className="panel">
-        <div className="panel-header">
+      <section className="panel list-overview-panel">
+        <div className="panel-header panel-header-tight">
           <div>
             <p className="eyebrow">My Lists</p>
-            <h2>リスト一覧</h2>
+            <h2>すぐ開けるリスト</h2>
           </div>
           <Link href="/lists/new" className="primary-button">新しいリスト</Link>
         </div>
-        <div className="card-grid">
+        <div className="list-overview-grid">
           {lists.map((list) => (
-            <article className="list-card" key={list.id}>
+            <article className="list-card list-card-modern" key={list.id}>
               <div className="list-card-head">
                 <div>
                   <h3>{list.name}</h3>
@@ -130,18 +130,14 @@ export function HomeClient() {
                 </div>
                 <span className="tag">{VISIBILITY_LABELS[list.visibility]}</span>
               </div>
-              <div className="metric-row">
-                <span>{list.pendingCount} 件が未購入</span>
-                <span>{list.purchasedCount} 件が購入済み</span>
+              <div className="metric-pills">
+                <span className="metric-pill strong">未購入 {list.pendingCount}</span>
+                <span className="metric-pill">購入済み {list.purchasedCount}</span>
+                <span className="metric-pill">今日 {list.dueTodayCount}</span>
+                <span className="metric-pill warning">期限切れ {list.overdueCount}</span>
+                <span className="metric-pill">予定日 {formatDate(list.plannedDate)}</span>
               </div>
-              <div className="metric-row">
-                <span>予定日 {formatDate(list.plannedDate)}</span>
-                <span>今日 {list.dueTodayCount}</span>
-                <span>期限切れ {list.overdueCount}</span>
-                <span>通知対象 {list.reminderTodayCount}</span>
-                <span>{list.memberCount} 人で共有</span>
-              </div>
-              <div className="inline-badges">
+              <div className="inline-badges member-cluster">
                 {list.memberNames.map((memberName) => (
                   <span className="name-badge soft" key={`${list.id}-${memberName}`}>{memberName}</span>
                 ))}
