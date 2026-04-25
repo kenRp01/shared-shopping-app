@@ -17,6 +17,7 @@ import type {
   ShoppingListMember,
   ShoppingListOverview,
   ShoppingListSnapshot,
+  UpdateItemPayload,
   UpdateReminderSettingsPayload,
   UserProfile,
 } from "@/lib/types";
@@ -627,6 +628,44 @@ export async function createItem(listId: string, viewer: UserProfile, payload: C
     await db.put("lists", { ...list, updatedAt: now });
   }
   return item;
+}
+
+export async function updateItem(listId: string, itemId: string, viewer: UserProfile, payload: UpdateItemPayload) {
+  const result = createItemSchema.safeParse(payload);
+  if (!result.success) {
+    throw new Error("商品情報を確認してください。");
+  }
+
+  const snapshot = await getListSnapshot(listId, viewer.id);
+  if (!snapshot || snapshot.permission !== "edit") {
+    throw new Error("このリストを編集する権限がありません。");
+  }
+
+  const db = await getDb();
+  const item = await db.get("items", itemId);
+  if (!item || item.listId !== listId) {
+    throw new Error("商品が見つかりません。");
+  }
+
+  const now = new Date().toISOString();
+  await db.put("items", {
+    ...item,
+    title: result.data.title,
+    quantity: result.data.quantity,
+    note: result.data.note,
+    scope: result.data.scope,
+    dueDate: result.data.dueDate,
+    dueTime: result.data.dueTime,
+    remindOn: result.data.remindOn,
+    reminderEnabled: result.data.reminderEnabled,
+    updatedByUserId: viewer.id,
+    updatedAt: now,
+  });
+
+  const list = await db.get("lists", listId);
+  if (list) {
+    await db.put("lists", { ...list, updatedAt: now });
+  }
 }
 
 export async function toggleItemStatus(listId: string, itemId: string, viewer: UserProfile) {

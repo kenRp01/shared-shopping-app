@@ -521,6 +521,13 @@ main {
   overflow: hidden;
 }
 
+.item-row-top {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  width: 100%;
+}
+
 .item-list-stack {
   gap: 10px;
 }
@@ -553,6 +560,27 @@ main {
 .item-title span {
   color: var(--muted);
   font-size: 0.92rem;
+}
+
+.item-edit-form {
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+}
+
+.item-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.item-edit-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .metric-pills {
@@ -794,6 +822,15 @@ code {
 
   .item-row {
     gap: 12px;
+  }
+
+  .item-row-top,
+  .item-edit-actions {
+    flex-direction: column;
+  }
+
+  .item-edit-grid {
+    grid-template-columns: 1fr;
   }
 
   .item-row-modern::before {

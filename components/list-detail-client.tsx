@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, type Dispatch, type SetStateAction } from "react";
 import { DEFAULT_ITEM_FORM, ITEM_SCOPE_LABELS, VISIBILITY_LABELS } from "@/lib/constants";
 import {
   createItem,
@@ -10,6 +10,7 @@ import {
   getPublicSnapshot,
   removeItem,
   toggleItemStatus,
+  updateItem,
 } from "@/lib/local-store";
 import { useSpeechInput } from "@/lib/use-speech-input";
 import type { CreateItemPayload, ShoppingItemView, ShoppingListSnapshot, UserProfile } from "@/lib/types";
@@ -25,6 +26,8 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const [snapshot, setSnapshot] = useState<ShoppingListSnapshot | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
   const [isPending, startTransition] = useTransition();
   const speech = useSpeechInput((transcript) => {
     setForm((current) => ({
@@ -75,7 +78,14 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                     throw new Error("ログインが必要です。");
                   }
                   await createItem(snapshot.list.id, user, form);
-                  setForm(DEFAULT_ITEM_FORM);
+                  setForm((current) => ({
+                    ...DEFAULT_ITEM_FORM,
+                    scope: current.scope,
+                    dueDate: current.dueDate,
+                    dueTime: current.dueTime,
+                    remindOn: current.remindOn,
+                    reminderEnabled: current.reminderEnabled,
+                  }));
                   await refresh(user);
                   setMessage(null);
                 } catch (error) {
@@ -125,40 +135,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
               </button>
             </div>
 
-            <div className="quick-add-meta">
-              <label>
-                登録タイプ
-                <select value={form.scope} onChange={(event) => setForm({ ...form, scope: event.target.value as CreateItemPayload["scope"] })}>
-                  <option value="shared">共有する買い物</option>
-                  <option value="personal">自分の買い物</option>
-                </select>
-              </label>
-              <label>
-                買いたい日
-                <input type="date" value={form.dueDate ?? ""} onChange={(event) => setForm({ ...form, dueDate: event.target.value || null })} />
-              </label>
-              <label>
-                時刻
-                <input type="time" value={form.dueTime ?? ""} onChange={(event) => setForm({ ...form, dueTime: event.target.value || null })} />
-              </label>
-              <label>
-                リマインド日
-                <input type="date" value={form.remindOn ?? ""} onChange={(event) => setForm({ ...form, remindOn: event.target.value || null })} />
-              </label>
-            </div>
-
-            <label>
-              メモ
-              <input value={form.note} placeholder="ブランドや売り場メモ" onChange={(event) => setForm({ ...form, note: event.target.value })} />
-            </label>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={form.reminderEnabled}
-                onChange={(event) => setForm({ ...form, reminderEnabled: event.target.checked })}
-              />
-              この商品を日次リマインド対象にする
-            </label>
             {speech.error ? <p className="notice-inline">{speech.error}</p> : null}
             {message ? <p className="notice-inline">{message}</p> : null}
           </form>
@@ -233,6 +209,33 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                 await removeItem(snapshot.list.id, item.id, user);
                 await refresh(user);
               }}
+              onEdit={
+                snapshot.permission === "edit" && !publicToken
+                  ? async (payload) => {
+                      if (!user) return;
+                      await updateItem(snapshot.list.id, item.id, user, payload);
+                      setEditingItemId(null);
+                      await refresh(user);
+                    }
+                  : undefined
+              }
+              editing={editingItemId === item.id}
+              onStartEdit={() => {
+                setEditingItemId(item.id);
+                setEditForm({
+                  title: item.title,
+                  quantity: item.quantity,
+                  note: item.note,
+                  scope: item.scope,
+                  dueDate: item.dueDate,
+                  dueTime: item.dueTime,
+                  remindOn: item.remindOn,
+                  reminderEnabled: item.reminderEnabled,
+                });
+              }}
+              onCancelEdit={() => setEditingItemId(null)}
+              editForm={editForm}
+              setEditForm={setEditForm}
             />
           ))}
         </div>
@@ -262,6 +265,33 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                 await removeItem(snapshot.list.id, item.id, user);
                 await refresh(user);
               }}
+              onEdit={
+                snapshot.permission === "edit" && !publicToken
+                  ? async (payload) => {
+                      if (!user) return;
+                      await updateItem(snapshot.list.id, item.id, user, payload);
+                      setEditingItemId(null);
+                      await refresh(user);
+                    }
+                  : undefined
+              }
+              editing={editingItemId === item.id}
+              onStartEdit={() => {
+                setEditingItemId(item.id);
+                setEditForm({
+                  title: item.title,
+                  quantity: item.quantity,
+                  note: item.note,
+                  scope: item.scope,
+                  dueDate: item.dueDate,
+                  dueTime: item.dueTime,
+                  remindOn: item.remindOn,
+                  reminderEnabled: item.reminderEnabled,
+                });
+              }}
+              onCancelEdit={() => setEditingItemId(null)}
+              editForm={editForm}
+              setEditForm={setEditForm}
             />
           ))}
         </div>
@@ -275,51 +305,152 @@ function ItemRow({
   editable,
   onToggle,
   onRemove,
+  onEdit,
+  editing,
+  onStartEdit,
+  onCancelEdit,
+  editForm,
+  setEditForm,
 }: {
   item: ShoppingItemView;
   editable: boolean;
   onToggle: () => Promise<void>;
   onRemove?: () => Promise<void>;
+  onEdit?: (payload: CreateItemPayload) => Promise<void>;
+  editing: boolean;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  editForm: CreateItemPayload;
+  setEditForm: Dispatch<SetStateAction<CreateItemPayload>>;
 }) {
+  const [isSaving, startSaving] = useTransition();
+  const [editMessage, setEditMessage] = useState<string | null>(null);
+
   return (
     <article className={cn("item-row item-row-modern", item.status === "purchased" && "item-row-done", item.dueState === "today" && "item-row-today", item.dueState === "overdue" && "item-row-overdue")}>
-      {editable ? (
-        <label className="item-check">
-          <input
-            type="checkbox"
-            checked={item.status === "purchased"}
-            onChange={() => void onToggle()}
-            aria-label={item.status === "pending" ? `${item.title} を購入済みにする` : `${item.title} を未購入に戻す`}
-          />
-          <span className="item-check-ui" aria-hidden="true" />
-        </label>
-      ) : item.status === "purchased" ? (
-        <span className="item-check read-only" aria-hidden="true">
-          <span className="item-check-ui checked" />
-        </span>
-      ) : null}
-      <div className="item-main">
-        <div className="item-title">
-          <strong>{item.title}</strong>
-          <span>{item.quantity}</span>
+      <div className="item-row-top">
+        {editable ? (
+          <label className="item-check">
+            <input
+              type="checkbox"
+              checked={item.status === "purchased"}
+              onChange={() => void onToggle()}
+              aria-label={item.status === "pending" ? `${item.title} を購入済みにする` : `${item.title} を未購入に戻す`}
+            />
+            <span className="item-check-ui" aria-hidden="true" />
+          </label>
+        ) : item.status === "purchased" ? (
+          <span className="item-check read-only" aria-hidden="true">
+            <span className="item-check-ui checked" />
+          </span>
+        ) : null}
+        <div className="item-main">
+          <div className="item-title">
+            <strong>{item.title}</strong>
+            <span>{item.quantity}</span>
+          </div>
+          {item.note ? <p>{item.note}</p> : null}
+          <div className="inline-badges inline-badges-tight">
+            <span className={`tag ${item.scope === "personal" ? "" : "soft"}`}>{ITEM_SCOPE_LABELS[item.scope]}</span>
+            <span className="name-badge">{item.createdByName}</span>
+            {item.purchasedByName ? <span className="name-badge soft">購入 {item.purchasedByName}</span> : null}
+            <span className="tag soft">{formatDate(item.dueDate)}</span>
+            {item.reminderEnabled ? <span className="tag accent">通知 {formatDate(item.remindOn ?? item.dueDate)}</span> : null}
+          </div>
         </div>
-        {item.note ? <p>{item.note}</p> : null}
-        <div className="inline-badges inline-badges-tight">
-          <span className={`tag ${item.scope === "personal" ? "" : "soft"}`}>{ITEM_SCOPE_LABELS[item.scope]}</span>
-          <span className="name-badge">{item.createdByName}</span>
-          {item.purchasedByName ? <span className="name-badge soft">購入 {item.purchasedByName}</span> : null}
-          <span className="tag soft">{formatDate(item.dueDate)}</span>
-          {item.reminderEnabled ? <span className="tag accent">通知 {formatDate(item.remindOn ?? item.dueDate)}</span> : null}
-        </div>
-      </div>
-      {editable ? (
-        <div className="item-actions">
-          {onRemove ? (
-            <button type="button" className="ghost-button danger" onClick={() => void onRemove()}>
-              削除
+        {editable ? (
+          <div className="item-actions">
+            <button type="button" className="ghost-button" onClick={onStartEdit}>
+              編集
             </button>
-          ) : null}
-        </div>
+            {onRemove ? (
+              <button type="button" className="ghost-button danger" onClick={() => void onRemove()}>
+                削除
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      {editing && onEdit ? (
+        <form
+          className="item-edit-form"
+          action={() => {
+            startSaving(async () => {
+              try {
+                await onEdit(editForm);
+                setEditMessage(null);
+              } catch (error) {
+                setEditMessage(error instanceof Error ? error.message : "保存できませんでした。");
+              }
+            });
+          }}
+        >
+          <div className="item-edit-grid">
+            <label>
+              商品名
+              <input value={editForm.title} onChange={(event) => setEditForm((current) => ({ ...current, title: event.target.value }))} />
+            </label>
+            <label>
+              数量
+              <input value={editForm.quantity} onChange={(event) => setEditForm((current) => ({ ...current, quantity: event.target.value }))} />
+            </label>
+            <label>
+              登録タイプ
+              <select
+                value={editForm.scope}
+                onChange={(event) => setEditForm((current) => ({ ...current, scope: event.target.value as CreateItemPayload["scope"] }))}
+              >
+                <option value="shared">共有する買い物</option>
+                <option value="personal">自分の買い物</option>
+              </select>
+            </label>
+            <label>
+              買いたい日
+              <input
+                type="date"
+                value={editForm.dueDate ?? ""}
+                onChange={(event) => setEditForm((current) => ({ ...current, dueDate: event.target.value || null }))}
+              />
+            </label>
+            <label>
+              時刻
+              <input
+                type="time"
+                value={editForm.dueTime ?? ""}
+                onChange={(event) => setEditForm((current) => ({ ...current, dueTime: event.target.value || null }))}
+              />
+            </label>
+            <label>
+              リマインド日
+              <input
+                type="date"
+                value={editForm.remindOn ?? ""}
+                onChange={(event) => setEditForm((current) => ({ ...current, remindOn: event.target.value || null }))}
+              />
+            </label>
+          </div>
+          <label>
+            メモ
+            <input value={editForm.note} onChange={(event) => setEditForm((current) => ({ ...current, note: event.target.value }))} />
+          </label>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={editForm.reminderEnabled}
+              onChange={(event) => setEditForm((current) => ({ ...current, reminderEnabled: event.target.checked }))}
+            />
+            通知する
+          </label>
+          <div className="item-edit-actions">
+            <button type="submit" className="primary-button" disabled={isSaving}>
+              {isSaving ? "保存中..." : "保存"}
+            </button>
+            <button type="button" className="ghost-button" onClick={onCancelEdit} disabled={isSaving}>
+              閉じる
+            </button>
+          </div>
+          {editMessage ? <p className="notice-inline">{editMessage}</p> : null}
+        </form>
       ) : null}
     </article>
   );
