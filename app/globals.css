@@ -347,6 +347,57 @@ main {
   align-items: center;
 }
 
+.item-check {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  cursor: pointer;
+}
+
+.item-check.read-only {
+  cursor: default;
+}
+
+.item-check input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.item-check-ui {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 2px solid var(--line);
+  background: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.item-check input:checked + .item-check-ui,
+.item-check-ui.checked {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.item-check input:checked + .item-check-ui::after,
+.item-check-ui.checked::after {
+  content: "";
+  width: 8px;
+  height: 12px;
+  border-right: 2px solid white;
+  border-bottom: 2px solid white;
+  transform: rotate(40deg) translate(-1px, -1px);
+}
+
 .list-card {
   display: grid;
   gap: 14px;
@@ -375,7 +426,7 @@ main {
   background: var(--success);
 }
 
-.item-row.item-row-done strong:first-child {
+.item-row.item-row-done .item-title strong {
   text-decoration: line-through;
 }
 

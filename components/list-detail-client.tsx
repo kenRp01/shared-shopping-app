@@ -240,6 +240,21 @@ function ItemRow({
 }) {
   return (
     <article className={cn("item-row", item.status === "purchased" && "item-row-done", item.dueState === "today" && "item-row-today", item.dueState === "overdue" && "item-row-overdue")}>
+      {editable ? (
+        <label className="item-check">
+          <input
+            type="checkbox"
+            checked={item.status === "purchased"}
+            onChange={() => void onToggle()}
+            aria-label={item.status === "pending" ? `${item.title} を購入済みにする` : `${item.title} を未購入に戻す`}
+          />
+          <span className="item-check-ui" aria-hidden="true" />
+        </label>
+      ) : item.status === "purchased" ? (
+        <span className="item-check read-only" aria-hidden="true">
+          <span className="item-check-ui checked" />
+        </span>
+      ) : null}
       <div className="item-main">
         <div className="item-title">
           <strong>{item.title}</strong>
@@ -256,9 +271,6 @@ function ItemRow({
       </div>
       {editable ? (
         <div className="item-actions">
-          <button type="button" className="ghost-button" onClick={() => void onToggle()}>
-            {item.status === "pending" ? "購入済みにする" : "未購入へ戻す"}
-          </button>
           {onRemove ? (
             <button type="button" className="ghost-button danger" onClick={() => void onRemove()}>
               削除
