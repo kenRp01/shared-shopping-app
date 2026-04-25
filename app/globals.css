@@ -59,6 +59,7 @@ textarea {
 .page-shell {
   min-height: 100vh;
   padding: 24px;
+  padding-bottom: 40px;
 }
 
 main {
@@ -96,6 +97,12 @@ main {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+
+.topnav a,
+.topnav button,
+.topnav .nav-pill {
+  flex-shrink: 0;
 }
 
 .logo-lockup {
@@ -569,6 +576,176 @@ code {
   background: var(--surface-strong);
 }
 
+@media (max-width: 720px) {
+  .page-shell {
+    padding: 12px;
+    padding-bottom: 32px;
+  }
+
+  .topbar {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border-radius: 20px;
+    gap: 14px;
+  }
+
+  .topnav {
+    width: calc(100% + 4px);
+    margin-inline: -2px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .topnav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .logo-lockup {
+    gap: 10px;
+  }
+
+  .logo-mark {
+    width: 42px;
+    height: 42px;
+    font-size: 1.25rem;
+  }
+
+  .logo-lockup h1 {
+    font-size: 1.15rem;
+  }
+
+  .panel,
+  .list-card,
+  .landing-hero-compact,
+  .dashboard-hero-compact,
+  .detail-hero-compact,
+  .list-overview-panel,
+  .list-section-panel,
+  .feature-panel-compact {
+    padding: 18px;
+    border-radius: 22px;
+  }
+
+  .home-shell,
+  .detail-shell,
+  .page-grid,
+  .card-grid,
+  .list-overview-grid,
+  .section-stack {
+    gap: 12px;
+  }
+
+  .hero-copy {
+    gap: 8px;
+  }
+
+  .lead-copy {
+    font-size: 0.96rem;
+    line-height: 1.55;
+  }
+
+  .status-ribbon,
+  .hero-actions,
+  .panel-header,
+  .summary-strip,
+  .card-actions,
+  .inline-badges,
+  .item-actions,
+  .metric-row,
+  .mini-metrics,
+  .member-list,
+  .demo-list,
+  .item-list,
+  .metric-pills {
+    gap: 8px;
+  }
+
+  .summary-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .summary-block {
+    min-width: 0;
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .summary-block strong {
+    font-size: 1.45rem;
+  }
+
+  .primary-button,
+  .ghost-button,
+  .nav-cta {
+    min-height: 46px;
+  }
+
+  .card-actions .primary-button,
+  .card-actions .ghost-button,
+  .hero-actions .primary-button,
+  .hero-actions .ghost-button {
+    flex: 1 1 calc(50% - 4px);
+  }
+
+  .panel-header-tight {
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .item-row,
+  .demo-row,
+  .member-row {
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .item-row {
+    gap: 12px;
+  }
+
+  .item-main {
+    min-width: 0;
+  }
+
+  .item-title {
+    gap: 4px;
+  }
+
+  .item-title strong {
+    font-size: 1rem;
+  }
+
+  .item-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .item-actions .ghost-button {
+    width: 100%;
+  }
+
+  .aside-panel {
+    order: -1;
+    position: static;
+  }
+
+  .form-panel {
+    gap: 12px;
+  }
+
+  .checkbox-row {
+    align-items: flex-start;
+  }
+
+  .checkbox-row input {
+    margin-top: 3px;
+  }
+}
+
 @media (max-width: 900px) {
   .auth-layout,
   .highlight-grid,
@@ -586,5 +763,66 @@ code {
 
   .aside-panel {
     position: static;
+  }
+}
+
+@media (max-width: 560px) {
+  input,
+  select,
+  textarea {
+    padding: 13px 14px;
+    border-radius: 14px;
+  }
+
+  .summary-strip,
+  .highlight-grid,
+  .field-grid,
+  .field-grid-compact,
+  .auth-layout,
+  .split-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .card-actions,
+  .hero-actions {
+    flex-direction: column;
+  }
+
+  .card-actions .primary-button,
+  .card-actions .ghost-button,
+  .hero-actions .primary-button,
+  .hero-actions .ghost-button {
+    width: 100%;
+    flex: 1 1 auto;
+  }
+
+  .item-row,
+  .demo-row,
+  .member-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .item-check {
+    width: 26px;
+    height: 26px;
+    flex-basis: 26px;
+  }
+
+  .item-check-ui {
+    width: 22px;
+    height: 22px;
+  }
+
+  .metric-pill {
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 0.83rem;
+  }
+
+  .member-row .tag,
+  .demo-row code,
+  .nav-pill {
+    align-self: flex-start;
   }
 }
