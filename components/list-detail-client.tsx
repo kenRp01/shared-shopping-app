@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
-import { DEFAULT_ITEM_FORM, VISIBILITY_LABELS } from "@/lib/constants";
+import { DEFAULT_ITEM_FORM, ITEM_SCOPE_LABELS, VISIBILITY_LABELS } from "@/lib/constants";
 import {
   createItem,
   getCurrentUser,
@@ -127,6 +127,13 @@ export function ListDetailClient({ listId, publicToken }: Props) {
             商品名
             <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
           </label>
+          <label>
+            登録タイプ
+            <select value={form.scope} onChange={(event) => setForm({ ...form, scope: event.target.value as CreateItemPayload["scope"] })}>
+              <option value="shared">共有する買い物</option>
+              <option value="personal">自分の買い物</option>
+            </select>
+          </label>
           <div className="field-grid">
             <label>
               数量
@@ -240,6 +247,7 @@ function ItemRow({
         </div>
         <p>{item.note || "メモなし"}</p>
         <div className="inline-badges">
+          <span className={`tag ${item.scope === "personal" ? "" : "soft"}`}>{ITEM_SCOPE_LABELS[item.scope]}</span>
           <span className="name-badge">{item.createdByName}</span>
           {item.purchasedByName ? <span className="name-badge soft">購入 {item.purchasedByName}</span> : null}
           <span className="tag soft">{formatDate(item.dueDate)}</span>

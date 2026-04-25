@@ -58,7 +58,7 @@ interface ShoppingDb extends DBSchema {
   };
 }
 
-const DB_NAME = "shared-shopping-board";
+const DB_NAME = "shareshopi-board";
 const DB_VERSION = 1;
 
 async function getDb() {
@@ -130,6 +130,7 @@ async function ensureSeeded(db: Awaited<ReturnType<typeof openDB<ShoppingDb>>>) 
       quantity: "2本",
       note: "朝食用",
       status: "pending",
+      scope: "shared",
       dueDate: todayKey(),
       dueTime: "18:00",
       remindOn: todayKey(),
@@ -147,6 +148,7 @@ async function ensureSeeded(db: Awaited<ReturnType<typeof openDB<ShoppingDb>>>) 
       quantity: "1パック",
       note: "",
       status: "pending",
+      scope: "personal",
       dueDate: todayKey(new Date(Date.now() - 24 * 60 * 60 * 1000)),
       dueTime: "12:00",
       remindOn: todayKey(),
@@ -164,6 +166,7 @@ async function ensureSeeded(db: Awaited<ReturnType<typeof openDB<ShoppingDb>>>) 
       quantity: "5箱",
       note: "ドラッグストアで安い時に",
       status: "purchased",
+      scope: "shared",
       dueDate: todayKey(),
       dueTime: "10:00",
       remindOn: todayKey(),
@@ -308,7 +311,9 @@ export async function listAccessibleLists(viewerId: string) {
     })
     .map<ShoppingListOverview>((list) => {
       const listMembers = members.filter((member) => member.listId === list.id);
-      const listItems = items.filter((item) => item.listId === list.id);
+      const listItems = items.filter(
+        (item) => item.listId === list.id && (item.scope === "shared" || item.createdByUserId === viewerId),
+      );
       const owner = users.find((user) => user.id === list.ownerUserId);
       const memberNames = listMembers
         .map((member) => users.find((user) => user.id === member.userId)?.name)
@@ -391,7 +396,18 @@ export async function getListSnapshot(listId: string, viewerId?: string | null):
 
   const userMap = new Map(users.map((user) => [user.id, user]));
   const itemViews: ShoppingItemView[] = items
-    .filter((item) => item.listId === list.id)
+    .filter((item) => {
+      if (item.listId !== list.id) {
+        return false;
+      }
+      if (item.scope === "shared") {
+        return true;
+      }
+      if (!viewerId) {
+        return false;
+      }
+      return item.createdByUserId === viewerId;
+    })
     .map((item) => {
       const createdBy = userMap.get(item.createdByUserId);
       const updatedBy = userMap.get(item.updatedByUserId);
@@ -456,6 +472,7 @@ export async function createItem(listId: string, viewer: UserProfile, payload: C
     quantity: result.data.quantity,
     note: result.data.note,
     status: "pending",
+    scope: result.data.scope,
     dueDate: result.data.dueDate,
     dueTime: result.data.dueTime,
     remindOn: result.data.remindOn,
@@ -571,13 +588,14 @@ export async function buildTodayDigests(viewer: UserProfile): Promise<ReminderDi
     if (!snapshot || !snapshot.list.dailyReminderEnabled) {
       continue;
     }
+    const sharedItemsOnly = snapshot.items.filter((item) => item.scope === "shared");
     const recipients = snapshot.members.map((member) => ({
       id: member.id,
       email: member.email,
       name: member.name,
       createdAt: member.createdAt,
     }));
-    const digest = buildReminderDigest(snapshot, recipients);
+    const digest = buildReminderDigest({ ...snapshot, items: sharedItemsOnly }, recipients);
     if (digest.itemGroup.dueToday.length || digest.itemGroup.overdue.length) {
       digests.push(digest);
     }

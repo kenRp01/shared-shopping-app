@@ -1,5 +1,5 @@
 ---
-name: Shared Shopping Board
+name: Shareshopi
 colors:
   primary: "#1B2A41"
   accent: "#F26B5B"

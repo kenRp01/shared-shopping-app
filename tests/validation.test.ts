@@ -26,6 +26,7 @@ describe("createItemSchema", () => {
       title: "",
       quantity: "1",
       note: "",
+      scope: "shared",
       dueDate: "2026-04-25",
       dueTime: "18:00",
       remindOn: "2026-04-24",

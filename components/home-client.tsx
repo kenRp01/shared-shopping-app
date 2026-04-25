@@ -28,10 +28,10 @@ export function HomeClient() {
       <div className="page-grid">
         <section className="panel landing-hero">
           <div>
-            <p className="eyebrow">Simple Shared Shopping</p>
+            <p className="eyebrow">Shareshopi</p>
             <h2>誰が入れたか、何が今日必要かを一目で分かる買い物アプリ</h2>
             <p className="lead-copy">
-              同じリストを複数人で共有し、商品ごとの期限と追加者を見ながら、公開リンクでも確認できる構成です。
+              シェアショピは、同じリストを複数人で共有し、商品ごとの期限と追加者を見ながら、公開リンクでも確認できる構成です。
             </p>
           </div>
           <div className="hero-actions">

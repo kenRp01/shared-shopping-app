@@ -3,6 +3,7 @@ export type Role = "owner" | "editor";
 export type ListVisibility = "private" | "shared" | "public_link";
 
 export type ItemStatus = "pending" | "purchased";
+export type ItemScope = "shared" | "personal";
 
 export type UserProfile = {
   id: string;
@@ -44,6 +45,7 @@ export type ShoppingItem = {
   quantity: string;
   note: string;
   status: ItemStatus;
+  scope: ItemScope;
   dueDate: string | null;
   dueTime: string | null;
   remindOn: string | null;
@@ -84,6 +86,7 @@ export type CreateItemPayload = {
   title: string;
   quantity: string;
   note: string;
+  scope: ItemScope;
   dueDate: string | null;
   dueTime: string | null;
   remindOn: string | null;

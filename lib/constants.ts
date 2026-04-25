@@ -1,4 +1,4 @@
-import type { CreateListPayload, CreateItemPayload, ListVisibility } from "@/lib/types";
+import type { CreateListPayload, CreateItemPayload, ItemScope, ListVisibility } from "@/lib/types";
 
 export const DESIGN_TOKENS = {
   colors: {
@@ -34,10 +34,16 @@ export const DEFAULT_ITEM_FORM: CreateItemPayload = {
   title: "",
   quantity: "1",
   note: "",
+  scope: "shared",
   dueDate: new Date().toISOString().slice(0, 10),
   dueTime: "18:00",
   remindOn: new Date().toISOString().slice(0, 10),
   reminderEnabled: true,
+};
+
+export const ITEM_SCOPE_LABELS: Record<ItemScope, string> = {
+  shared: "みんな",
+  personal: "自分用",
 };
 
 export const VISIBILITY_LABELS: Record<ListVisibility, string> = {

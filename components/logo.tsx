@@ -3,8 +3,8 @@ export function Logo() {
     <div className="logo-lockup">
       <div className="logo-mark">買</div>
       <div>
-        <p className="eyebrow">Shared Shopping</p>
-        <h1>みんなの買い物リスト</h1>
+        <p className="eyebrow">Shareshopi</p>
+        <h1>シェアショピ</h1>
       </div>
     </div>
   );
