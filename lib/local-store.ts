@@ -132,6 +132,7 @@ async function ensureSeeded(db: Awaited<ReturnType<typeof openDB<ShoppingDb>>>) 
       status: "pending",
       dueDate: todayKey(),
       dueTime: "18:00",
+      remindOn: todayKey(),
       reminderEnabled: true,
       createdByUserId: users[0].id,
       updatedByUserId: users[0].id,
@@ -148,6 +149,7 @@ async function ensureSeeded(db: Awaited<ReturnType<typeof openDB<ShoppingDb>>>) 
       status: "pending",
       dueDate: todayKey(new Date(Date.now() - 24 * 60 * 60 * 1000)),
       dueTime: "12:00",
+      remindOn: todayKey(),
       reminderEnabled: true,
       createdByUserId: users[1].id,
       updatedByUserId: users[1].id,
@@ -164,6 +166,7 @@ async function ensureSeeded(db: Awaited<ReturnType<typeof openDB<ShoppingDb>>>) 
       status: "purchased",
       dueDate: todayKey(),
       dueTime: "10:00",
+      remindOn: todayKey(),
       reminderEnabled: false,
       createdByUserId: users[0].id,
       updatedByUserId: users[1].id,
@@ -307,17 +310,22 @@ export async function listAccessibleLists(viewerId: string) {
       const listMembers = members.filter((member) => member.listId === list.id);
       const listItems = items.filter((item) => item.listId === list.id);
       const owner = users.find((user) => user.id === list.ownerUserId);
+      const memberNames = listMembers
+        .map((member) => users.find((user) => user.id === member.userId)?.name)
+        .filter((value): value is string => Boolean(value));
       const pending = listItems.filter((item) => item.status === "pending");
       const purchased = listItems.filter((item) => item.status === "purchased");
       const today = todayKey();
       return {
         ...list,
         ownerName: owner?.name ?? "不明",
+        memberNames,
         memberCount: listMembers.length,
         pendingCount: pending.length,
         purchasedCount: purchased.length,
         dueTodayCount: pending.filter((item) => item.dueDate === today).length,
         overdueCount: pending.filter((item) => item.dueDate && item.dueDate < today).length,
+        reminderTodayCount: pending.filter((item) => item.reminderEnabled && (item.remindOn ?? item.dueDate) === today).length,
         viewerRole:
           viewerId === list.ownerUserId
             ? "owner"
@@ -394,6 +402,7 @@ export async function getListSnapshot(listId: string, viewerId?: string | null):
         updatedByName: updatedBy?.name ?? "不明",
         purchasedByName: purchasedBy?.name ?? null,
         dueState: formatRelativeDue(item.dueDate, todayKey()),
+        reminderState: formatRelativeDue(item.remindOn ?? item.dueDate, todayKey()),
       };
     })
     .sort((left, right) => left.status.localeCompare(right.status) || left.createdAt.localeCompare(right.createdAt));
@@ -449,6 +458,7 @@ export async function createItem(listId: string, viewer: UserProfile, payload: C
     status: "pending",
     dueDate: result.data.dueDate,
     dueTime: result.data.dueTime,
+    remindOn: result.data.remindOn,
     reminderEnabled: result.data.reminderEnabled,
     createdByUserId: viewer.id,
     updatedByUserId: viewer.id,

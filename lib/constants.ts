@@ -36,6 +36,7 @@ export const DEFAULT_ITEM_FORM: CreateItemPayload = {
   note: "",
   dueDate: new Date().toISOString().slice(0, 10),
   dueTime: "18:00",
+  remindOn: new Date().toISOString().slice(0, 10),
   reminderEnabled: true,
 };
 

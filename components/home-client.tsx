@@ -136,7 +136,13 @@ export function HomeClient() {
               <div className="metric-row">
                 <span>今日 {list.dueTodayCount}</span>
                 <span>期限切れ {list.overdueCount}</span>
+                <span>通知対象 {list.reminderTodayCount}</span>
                 <span>{list.memberCount} 人で共有</span>
+              </div>
+              <div className="inline-badges">
+                {list.memberNames.map((memberName) => (
+                  <span className="name-badge soft" key={`${list.id}-${memberName}`}>{memberName}</span>
+                ))}
               </div>
               <div className="card-actions">
                 <Link href={`/lists/${list.id}`} className="primary-button">開く</Link>

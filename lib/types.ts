@@ -46,6 +46,7 @@ export type ShoppingItem = {
   status: ItemStatus;
   dueDate: string | null;
   dueTime: string | null;
+  remindOn: string | null;
   reminderEnabled: boolean;
   createdByUserId: string;
   updatedByUserId: string;
@@ -85,6 +86,7 @@ export type CreateItemPayload = {
   note: string;
   dueDate: string | null;
   dueTime: string | null;
+  remindOn: string | null;
   reminderEnabled: boolean;
 };
 
@@ -102,15 +104,18 @@ export type ShoppingItemView = ShoppingItem & {
   updatedByName: string;
   purchasedByName: string | null;
   dueState: "today" | "overdue" | "upcoming" | "none";
+  reminderState: "today" | "overdue" | "upcoming" | "none";
 };
 
 export type ShoppingListOverview = ShoppingList & {
   ownerName: string;
+  memberNames: string[];
   memberCount: number;
   pendingCount: number;
   purchasedCount: number;
   dueTodayCount: number;
   overdueCount: number;
+  reminderTodayCount: number;
   viewerRole: Role | null;
 };
 

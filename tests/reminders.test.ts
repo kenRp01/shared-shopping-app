@@ -41,6 +41,7 @@ const snapshot: ShoppingListSnapshot = {
       status: "pending",
       dueDate: "2026-04-25",
       dueTime: "18:00",
+      remindOn: "2026-04-26",
       reminderEnabled: true,
       createdByUserId: "user_1",
       updatedByUserId: "user_1",
@@ -51,6 +52,7 @@ const snapshot: ShoppingListSnapshot = {
       updatedByName: "Owner",
       purchasedByName: null,
       dueState: "today",
+      reminderState: "upcoming",
     },
     {
       id: "overdue",
@@ -61,6 +63,7 @@ const snapshot: ShoppingListSnapshot = {
       status: "pending",
       dueDate: "2026-04-24",
       dueTime: "12:00",
+      remindOn: "2026-04-25",
       reminderEnabled: true,
       createdByUserId: "user_1",
       updatedByUserId: "user_1",
@@ -71,6 +74,7 @@ const snapshot: ShoppingListSnapshot = {
       updatedByName: "Owner",
       purchasedByName: null,
       dueState: "overdue",
+      reminderState: "today",
     },
     {
       id: "done",
@@ -81,6 +85,7 @@ const snapshot: ShoppingListSnapshot = {
       status: "purchased",
       dueDate: "2026-04-25",
       dueTime: "10:00",
+      remindOn: "2026-04-25",
       reminderEnabled: true,
       createdByUserId: "user_1",
       updatedByUserId: "user_1",
@@ -91,6 +96,7 @@ const snapshot: ShoppingListSnapshot = {
       updatedByName: "Owner",
       purchasedByName: "Owner",
       dueState: "today",
+      reminderState: "today",
     },
   ],
 };
@@ -99,8 +105,8 @@ describe("groupReminderItems", () => {
   it("splits pending items into due buckets", () => {
     const groups = groupReminderItems(snapshot.items, "2026-04-25");
     expect(groups.dueToday).toHaveLength(1);
-    expect(groups.overdue).toHaveLength(1);
-    expect(groups.dueSoon).toHaveLength(0);
+    expect(groups.overdue).toHaveLength(0);
+    expect(groups.dueSoon).toHaveLength(1);
   });
 });
 
@@ -108,7 +114,7 @@ describe("buildReminderDigest", () => {
   it("creates a digest without purchased items", () => {
     const digest = buildReminderDigest(snapshot, [snapshot.owner], "2026-04-25");
     expect(digest.recipients).toEqual(["owner@example.com"]);
-    expect(digest.itemGroup.dueToday[0]?.title).toBe("牛乳");
-    expect(digest.itemGroup.overdue[0]?.title).toBe("卵");
+    expect(digest.itemGroup.dueToday[0]?.title).toBe("卵");
+    expect(digest.itemGroup.dueSoon[0]?.title).toBe("牛乳");
   });
 });

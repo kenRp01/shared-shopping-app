@@ -25,7 +25,7 @@ function renderDigest(digest: ReminderDigest) {
             <ul>
               ${section.items
                 .map(
-                  (item) => `<li>${item.title} / ${item.quantity} / 追加者: ${item.createdByName} / 期限: ${item.dueDate ?? "未設定"}</li>`,
+                  (item) => `<li>${item.title} / ${item.quantity} / 追加者: ${item.createdByName} / リマインド日: ${item.remindOn ?? item.dueDate ?? "未設定"} / 期限: ${item.dueDate ?? "未設定"}</li>`,
                 )
                 .join("")}
             </ul>

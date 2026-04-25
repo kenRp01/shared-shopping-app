@@ -6,7 +6,7 @@ export function groupReminderItems(items: ShoppingItemView[], today = todayKey()
 
   return pending.reduce<ReminderItemGroup>(
     (groups, item) => {
-      const state = formatRelativeDue(item.dueDate, today);
+      const state = formatRelativeDue(item.remindOn ?? item.dueDate, today);
       if (state === "today") {
         groups.dueToday.push(item);
       } else if (state === "overdue") {

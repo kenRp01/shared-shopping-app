@@ -29,6 +29,7 @@ export const createItemSchema = z.object({
   note: z.string().max(140),
   dueDate: z.string().date().nullable(),
   dueTime: z.string().regex(/^\d{2}:\d{2}$/).nullable(),
+  remindOn: z.string().date().nullable(),
   reminderEnabled: z.boolean(),
 });
 

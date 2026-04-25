@@ -198,6 +198,10 @@ main {
   flex-wrap: wrap;
 }
 
+.member-ribbon {
+  margin: 14px 0 6px;
+}
+
 .hero-actions,
 .summary-strip,
 .card-actions {

@@ -64,6 +64,14 @@ export function ListDetailClient({ listId, publicToken }: Props) {
             <span className="tag soft">{snapshot.members.length} 人で共有</span>
             {snapshot.list.dailyReminderEnabled ? <span className="tag accent">毎日 {snapshot.list.dailyReminderHour}</span> : null}
           </div>
+          <div className="inline-badges member-ribbon">
+            {snapshot.members.map((member) => (
+              <span className="name-badge soft" key={member.id}>
+                {member.name}
+                {member.role === "owner" ? " / 所有者" : ""}
+              </span>
+            ))}
+          </div>
           <h2>{snapshot.list.name}</h2>
           <p className="lead-copy">{snapshot.list.description || "共有する買い物をまとめるリストです。"}</p>
         </div>
@@ -131,6 +139,10 @@ export function ListDetailClient({ listId, publicToken }: Props) {
             <label>
               時刻
               <input type="time" value={form.dueTime ?? ""} onChange={(event) => setForm({ ...form, dueTime: event.target.value || null })} />
+            </label>
+            <label>
+              リマインド日
+              <input type="date" value={form.remindOn ?? ""} onChange={(event) => setForm({ ...form, remindOn: event.target.value || null })} />
             </label>
           </div>
           <label>
@@ -231,6 +243,7 @@ function ItemRow({
           <span className="name-badge">{item.createdByName}</span>
           {item.purchasedByName ? <span className="name-badge soft">購入 {item.purchasedByName}</span> : null}
           <span className="tag soft">{formatDate(item.dueDate)}</span>
+          {item.reminderEnabled ? <span className="tag accent">通知 {formatDate(item.remindOn ?? item.dueDate)}</span> : null}
         </div>
       </div>
       {editable ? (

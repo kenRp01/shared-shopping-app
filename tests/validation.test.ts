@@ -28,6 +28,7 @@ describe("createItemSchema", () => {
       note: "",
       dueDate: "2026-04-25",
       dueTime: "18:00",
+      remindOn: "2026-04-24",
       reminderEnabled: true,
     });
 
