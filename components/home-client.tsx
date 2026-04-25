@@ -30,10 +30,7 @@ export function HomeClient() {
         <section className="panel landing-hero landing-hero-compact">
           <div className="hero-copy">
             <p className="eyebrow">ShareShopi</p>
-            <h2>誰が入れたか、何が今日必要かを一目で分かる買い物アプリ</h2>
-            <p className="lead-copy">
-              ShareShopi は、同じリストを複数人で共有し、商品ごとの期限と追加者を見ながら、公開リンクでも確認できる構成です。
-            </p>
+            <h2>共有買い物リスト</h2>
           </div>
           <div className="hero-actions">
             <Link href="/signup" className="primary-button">無料で始める</Link>
@@ -46,29 +43,11 @@ export function HomeClient() {
           </div>
         </section>
 
-        <section className="card-grid feature-grid-compact">
-          <article className="panel feature-panel feature-panel-compact">
-            <p className="eyebrow">Visual First</p>
-            <h3>状態が色で見える</h3>
-            <p>今日が期限、期限切れ、購入済みを色分けして、見落としを減らします。</p>
-          </article>
-          <article className="panel feature-panel feature-panel-compact">
-            <p className="eyebrow">Shared Context</p>
-            <h3>追加者がすぐ分かる</h3>
-            <p>各商品に名前バッジが付き、誰が入れたか、誰が買ったかをその場で確認できます。</p>
-          </article>
-          <article className="panel feature-panel feature-panel-compact">
-            <p className="eyebrow">Cloud Ready</p>
-            <h3>無料構成を想定</h3>
-            <p>{configured ? "Supabase 環境変数を検出しています。クラウド連携へ進めます。" : "ローカルデモで動作しつつ、Supabase/Resend連携用の設定も含めています。"}</p>
-          </article>
-        </section>
-
         <section className="panel demo-panel">
           <div className="panel-header">
             <div>
               <p className="eyebrow">Demo Accounts</p>
-              <h2>まずは共有の動きを試せます</h2>
+              <h2>デモ</h2>
             </div>
           </div>
           <div className="demo-list">
@@ -94,7 +73,6 @@ export function HomeClient() {
         <div className="hero-copy">
           <p className="eyebrow">Today</p>
           <h2>{user.name}さんの買い物一覧</h2>
-          <p className="lead-copy">今日買うものと期限切れだけ先に見て、そのままリストを開けるように整理しています。</p>
         </div>
         <div className="summary-strip summary-strip-tight">
           <article className="summary-block accent">
@@ -116,7 +94,7 @@ export function HomeClient() {
         <div className="panel-header panel-header-tight">
           <div>
             <p className="eyebrow">My Lists</p>
-            <h2>すぐ開けるリスト</h2>
+            <h2>リスト</h2>
           </div>
           <Link href="/lists/new" className="primary-button">新しいリスト</Link>
         </div>
@@ -126,7 +104,7 @@ export function HomeClient() {
               <div className="list-card-head">
                 <div>
                   <h3>{list.name}</h3>
-                  <p>{list.description}</p>
+                  {list.description ? <p>{list.description}</p> : null}
                 </div>
                 <span className="tag">{VISIBILITY_LABELS[list.visibility]}</span>
               </div>

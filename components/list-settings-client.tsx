@@ -31,8 +31,7 @@ export function ListSettingsClient({ listId }: Props) {
   if (!snapshot || snapshot.permission !== "edit") {
     return (
       <section className="panel">
-        <p className="eyebrow">Unavailable</p>
-        <h2>設定を表示できません</h2>
+        <h2>表示できません</h2>
       </section>
     );
   }
@@ -41,8 +40,7 @@ export function ListSettingsClient({ listId }: Props) {
     <div className="page-grid">
       <section className="panel">
         <p className="eyebrow">List Settings</p>
-        <h2>{snapshot.list.name} の共有設定</h2>
-        <p className="compact-copy">共有メンバー追加と公開リンク、毎日の通知時刻をここで管理します。</p>
+        <h2>{snapshot.list.name}</h2>
       </section>
 
       <form
@@ -69,7 +67,7 @@ export function ListSettingsClient({ listId }: Props) {
       >
         <div className="compact-heading">
           <p className="eyebrow">Reminder</p>
-          <h2>通知と公開範囲</h2>
+          <h2>通知</h2>
         </div>
         <label className="checkbox-row">
           <input name="dailyReminderEnabled" type="checkbox" defaultChecked={snapshot.list.dailyReminderEnabled} />
@@ -124,7 +122,7 @@ export function ListSettingsClient({ listId }: Props) {
       >
         <div className="compact-heading">
           <p className="eyebrow">Members</p>
-          <h2>共有メンバー</h2>
+          <h2>メンバー</h2>
         </div>
         <label>
           登録済みユーザーのメールアドレス

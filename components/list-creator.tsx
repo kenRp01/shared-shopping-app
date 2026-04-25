@@ -29,8 +29,7 @@ export function ListCreator() {
   if (!user) {
     return (
       <section className="panel">
-        <p className="eyebrow">Login Required</p>
-        <h2>リスト作成にはログインが必要です</h2>
+        <h2>ログインしてください</h2>
       </section>
     );
   }
@@ -51,7 +50,7 @@ export function ListCreator() {
     >
       <div className="compact-heading">
         <p className="eyebrow">Create List</p>
-        <h2>新しい共有リスト</h2>
+        <h2>新しいリスト</h2>
       </div>
       <label>
         リスト名
@@ -75,7 +74,6 @@ export function ListCreator() {
           ) : null}
         </div>
       </label>
-      {speech.isSupported ? <p className="field-hint">リスト名も音声で入力できます。</p> : null}
       <label>
         説明
         <textarea value={form.description} maxLength={140} onChange={(event) => setForm({ ...form, description: event.target.value })} />

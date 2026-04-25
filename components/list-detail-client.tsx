@@ -57,8 +57,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   if (!snapshot) {
     return (
       <section className="panel">
-        <p className="eyebrow">Unavailable</p>
-        <h2>リストが見つからないか、閲覧権限がありません</h2>
+        <h2>表示できません</h2>
       </section>
     );
   }
@@ -87,7 +86,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
           >
             <div className="compact-heading">
               <p className="eyebrow">Quick Add</p>
-              <h2>上からすぐ追加</h2>
+              <h2>追加</h2>
             </div>
 
             <div className="quick-add-row">
@@ -125,8 +124,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                 {isPending ? "追加中..." : "追加"}
               </button>
             </div>
-
-            {speech.isSupported ? <p className="field-hint">マイクを押して商品名を話すと、そのまま入力できます。</p> : null}
 
             <div className="quick-add-meta">
               <label>
@@ -185,7 +182,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
             ))}
           </div>
           <h2>{snapshot.list.name}</h2>
-          <p className="lead-copy">{snapshot.list.description || "共有する買い物をまとめるリストです。"}</p>
+          {snapshot.list.description ? <p className="lead-copy">{snapshot.list.description}</p> : null}
         </div>
         {publicToken ? null : (
           <div className="card-actions">
@@ -220,7 +217,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
           </div>
         </div>
         <div className="item-list item-list-stack">
-          {pendingItems.length === 0 ? <p className="empty-state">未購入の商品はありません。</p> : null}
+          {pendingItems.length === 0 ? <p className="empty-state">なし</p> : null}
           {pendingItems.map((item) => (
             <ItemRow
               item={item}
@@ -249,7 +246,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
           </div>
         </div>
         <div className="item-list item-list-stack">
-          {purchasedItems.length === 0 ? <p className="empty-state">まだ購入済みの商品はありません。</p> : null}
+          {purchasedItems.length === 0 ? <p className="empty-state">なし</p> : null}
           {purchasedItems.map((item) => (
             <ItemRow
               item={item}
