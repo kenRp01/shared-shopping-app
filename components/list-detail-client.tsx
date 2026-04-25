@@ -11,6 +11,7 @@ import {
   removeItem,
   toggleItemStatus,
 } from "@/lib/local-store";
+import { useSpeechInput } from "@/lib/use-speech-input";
 import type { CreateItemPayload, ShoppingItemView, ShoppingListSnapshot, UserProfile } from "@/lib/types";
 import { cn, formatDate } from "@/lib/utils";
 
@@ -25,6 +26,13 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
   const [isPending, startTransition] = useTransition();
+  const speech = useSpeechInput((transcript) => {
+    setForm((current) => ({
+      ...current,
+      title: current.title ? `${current.title} ${transcript}`.trim() : transcript,
+    }));
+    setMessage(null);
+  });
 
   async function refresh(currentUser?: UserProfile | null) {
     const nextUser = currentUser ?? (await getCurrentUser());
@@ -188,8 +196,27 @@ export function ListDetailClient({ listId, publicToken }: Props) {
               </div>
               <label>
                 商品名
-                <input value={form.title} placeholder="牛乳、卵、洗剤" onChange={(event) => setForm({ ...form, title: event.target.value })} />
+                <div className="input-with-action">
+                  <input value={form.title} placeholder="牛乳、卵、洗剤" onChange={(event) => setForm({ ...form, title: event.target.value })} />
+                  {speech.isSupported ? (
+                    <button
+                      type="button"
+                      className={cn("voice-button", speech.isListening && "voice-button-live")}
+                      onClick={() => {
+                        if (speech.isListening) {
+                          speech.stopListening();
+                          return;
+                        }
+                        speech.startListening();
+                      }}
+                      aria-label={speech.isListening ? "音声入力を停止" : "音声入力を開始"}
+                    >
+                      {speech.isListening ? "録音中" : "音声"}
+                    </button>
+                  ) : null}
+                </div>
               </label>
+              {speech.isSupported ? <p className="field-hint">マイクを押して商品名を話すと、そのまま入力できます。</p> : null}
               <div className="field-grid field-grid-compact">
                 <label>
                   数量
@@ -229,6 +256,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                 />
                 この商品を日次リマインド対象にする
               </label>
+              {speech.error ? <p className="notice-inline">{speech.error}</p> : null}
               {message ? <p className="notice-inline">{message}</p> : null}
               <button type="submit" className="primary-button" disabled={isPending}>
                 {isPending ? "追加中..." : "商品を追加"}
