@@ -219,6 +219,11 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                 await toggleItemStatus(snapshot.list.id, item.id, user);
                 await refresh(user);
               }}
+              onRemove={async () => {
+                if (!user) return;
+                await removeItem(snapshot.list.id, item.id, user);
+                await refresh(user);
+              }}
             />
           ))}
         </div>
