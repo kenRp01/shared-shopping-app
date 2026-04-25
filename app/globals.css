@@ -244,6 +244,22 @@ main {
   margin: 14px 0 6px;
 }
 
+.inline-badges-scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.inline-badges-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.inline-badges-scroll > * {
+  flex: 0 0 auto;
+}
+
 .hero-actions,
 .summary-strip,
 .card-actions {

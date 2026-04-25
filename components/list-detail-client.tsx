@@ -95,11 +95,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
               });
             }}
           >
-            <div className="compact-heading">
-              <p className="eyebrow">Quick Add</p>
-              <h2>追加</h2>
-            </div>
-
             <div className="quick-add-row">
               <div className="quick-add-title">
                 <label>
@@ -144,13 +139,13 @@ export function ListDetailClient({ listId, publicToken }: Props) {
 
       <section className="panel detail-hero detail-hero-compact">
         <div>
-          <div className="inline-badges inline-badges-tight">
+          <div className="inline-badges inline-badges-tight inline-badges-scroll">
             <span className="tag">{VISIBILITY_LABELS[snapshot.list.visibility]}</span>
             <span className="tag soft">{snapshot.members.length} 人で共有</span>
             <span className="tag soft">予定日 {formatDate(snapshot.list.plannedDate)}</span>
             {snapshot.list.dailyReminderEnabled ? <span className="tag accent">毎日 {snapshot.list.dailyReminderHour}</span> : null}
           </div>
-          <div className="inline-badges member-ribbon">
+          <div className="inline-badges member-ribbon inline-badges-scroll">
             {snapshot.members.map((member) => (
               <span className="name-badge soft" key={member.id}>
                 {member.name}
