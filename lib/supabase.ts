@@ -11,10 +11,6 @@ function requirePublicEnv() {
   return { url, anonKey };
 }
 
-export function hasSupabaseEnv(): boolean {
-  return Boolean(requirePublicEnv());
-}
-
 export async function createSupabaseServerClient() {
   const env = requirePublicEnv();
   if (!env) {
@@ -32,14 +28,6 @@ export async function createSupabaseServerClient() {
       },
     },
   });
-}
-
-export function createSupabaseBrowserClient() {
-  const env = requirePublicEnv();
-  if (!env) {
-    return null;
-  }
-  return createClient(env.url, env.anonKey);
 }
 
 export function createSupabaseAdminClient() {

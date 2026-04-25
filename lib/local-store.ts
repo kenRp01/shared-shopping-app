@@ -3,6 +3,7 @@
 import { openDB, type DBSchema } from "idb";
 import { DEMO_USERS, DEFAULT_LIST_FORM, DEFAULT_ITEM_FORM } from "@/lib/constants";
 import { buildReminderDigest } from "@/lib/reminders";
+import { createSupabaseBrowserClient, hasSupabaseEnv } from "@/lib/supabase-browser";
 import type {
   CreateItemPayload,
   CreateListPayload,
@@ -218,6 +219,41 @@ async function getItemsForList(listId: string) {
   return items;
 }
 
+async function upsertLocalUser(account: UserRecord, persistSession: boolean) {
+  const db = await getDb();
+  const tx = db.transaction(["users", "session"], "readwrite");
+  await tx.objectStore("users").put(account);
+  if (persistSession) {
+    await tx.objectStore("session").put({ userId: account.id }, "current");
+  } else {
+    await tx.objectStore("session").delete("current");
+  }
+  await tx.done;
+  return toProfile(account);
+}
+
+function deriveName(email: string, fallback?: string | null) {
+  return fallback?.trim() || email.split("@")[0] || "ユーザー";
+}
+
+async function syncSupabaseUserToLocal(params: {
+  id: string;
+  email: string;
+  name?: string | null;
+  persistSession: boolean;
+}) {
+  const db = await getDb();
+  const existing = await db.get("users", params.id);
+  const account: UserRecord = {
+    id: params.id,
+    email: params.email.toLowerCase(),
+    name: params.name?.trim() || existing?.name || deriveName(params.email, params.name),
+    password: existing?.password ?? "",
+    createdAt: existing?.createdAt ?? new Date().toISOString(),
+  };
+  return upsertLocalUser(account, params.persistSession);
+}
+
 function canView(list: ShoppingList, memberUserIds: string[], viewerId?: string | null) {
   if (list.visibility === "public_link") {
     return true;
@@ -239,6 +275,48 @@ export async function signUpLocal(payload: { name: string; email: string; passwo
   const result = signupSchema.safeParse(payload);
   if (!result.success) {
     throw new Error("入力内容を確認してください。");
+  }
+
+  if (hasSupabaseEnv()) {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      throw new Error("Supabase の接続設定を確認してください。");
+    }
+
+    const normalizedEmail = result.data.email.toLowerCase();
+    const { data, error } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password: result.data.password,
+      options: {
+        data: {
+          name: result.data.name,
+        },
+      },
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (!data.user?.email) {
+      throw new Error("ユーザー登録に失敗しました。");
+    }
+
+    const profile = await syncSupabaseUserToLocal({
+      id: data.user.id,
+      email: data.user.email,
+      name:
+        typeof data.user.user_metadata?.name === "string"
+          ? data.user.user_metadata.name
+          : result.data.name,
+      persistSession: Boolean(data.session),
+    });
+
+    if (!data.session) {
+      throw new Error("Supabase に登録しました。メール確認を有効にしている場合は、受信メールのリンクを開いてからログインしてください。");
+    }
+
+    return profile;
   }
 
   const db = await getDb();
@@ -269,6 +347,33 @@ export async function signInLocal(payload: { email: string; password: string }) 
     throw new Error("メールアドレスまたはパスワードが正しくありません。");
   }
 
+  if (hasSupabaseEnv()) {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      throw new Error("Supabase の接続設定を確認してください。");
+    }
+
+    const normalizedEmail = result.data.email.toLowerCase();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password: result.data.password,
+    });
+
+    if (error || !data.user?.email) {
+      throw new Error(error?.message || "メールアドレスまたはパスワードが正しくありません。");
+    }
+
+    const nameFromMeta =
+      typeof data.user.user_metadata?.name === "string" ? data.user.user_metadata.name : null;
+
+    return syncSupabaseUserToLocal({
+      id: data.user.id,
+      email: data.user.email,
+      name: nameFromMeta,
+      persistSession: true,
+    });
+  }
+
   const db = await getDb();
   const users = await db.getAll("users");
   const normalizedEmail = result.data.email.toLowerCase();
@@ -282,11 +387,42 @@ export async function signInLocal(payload: { email: string; password: string }) 
 }
 
 export async function signOutLocal() {
+  if (hasSupabaseEnv()) {
+    const supabase = createSupabaseBrowserClient();
+    await supabase?.auth.signOut();
+  }
   const db = await getDb();
   await db.delete("session", "current");
 }
 
 export async function getCurrentUser() {
+  if (hasSupabaseEnv()) {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      return null;
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user?.email) {
+      const db = await getDb();
+      await db.delete("session", "current");
+      return null;
+    }
+
+    const nameFromMeta =
+      typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null;
+
+    return syncSupabaseUserToLocal({
+      id: user.id,
+      email: user.email,
+      name: nameFromMeta,
+      persistSession: true,
+    });
+  }
+
   const db = await getDb();
   const session = await db.get("session", "current");
   if (!session) {
@@ -625,5 +761,8 @@ export async function createDemoItem(listId: string, viewer: UserProfile) {
 export async function getDemoCredentials() {
   const db = await getDb();
   const users = await db.getAll("users");
-  return users.slice(0, 2).map((user) => ({ email: user.email, password: user.password, name: user.name }));
+  return users
+    .filter((user) => user.password)
+    .slice(0, 2)
+    .map((user) => ({ email: user.email, password: user.password, name: user.name }));
 }
