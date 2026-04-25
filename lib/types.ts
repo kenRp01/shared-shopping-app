@@ -20,6 +20,7 @@ export type ShoppingList = {
   id: string;
   name: string;
   description: string;
+  plannedDate: string | null;
   visibility: ListVisibility;
   ownerUserId: string;
   publicToken: string | null;
@@ -73,6 +74,7 @@ export type SessionRecord = {
 export type CreateListPayload = {
   name: string;
   description: string;
+  plannedDate: string | null;
   visibility: ListVisibility;
   dailyReminderEnabled: boolean;
   dailyReminderHour: string;

@@ -11,6 +11,7 @@ describe("createListSchema", () => {
     const result = createListSchema.safeParse({
       name: "週末の買い物",
       description: "家族で使う",
+      plannedDate: "2026-04-26",
       visibility: "shared",
       dailyReminderEnabled: true,
       dailyReminderHour: "08:00",

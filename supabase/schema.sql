@@ -11,6 +11,7 @@ create table if not exists shopping_lists (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   description text not null default '',
+  planned_date date,
   visibility text not null check (visibility in ('private', 'shared', 'public_link')),
   owner_user_id uuid not null references profiles(id) on delete cascade,
   public_token text unique,

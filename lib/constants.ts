@@ -25,6 +25,7 @@ export const DEFAULT_REMINDER_HOUR = "08:00";
 export const DEFAULT_LIST_FORM: CreateListPayload = {
   name: "",
   description: "",
+  plannedDate: new Date().toISOString().slice(0, 10),
   visibility: "shared",
   dailyReminderEnabled: true,
   dailyReminderHour: DEFAULT_REMINDER_HOUR,

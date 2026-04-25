@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { getCurrentUser, getDemoCredentials, listAccessibleLists } from "@/lib/local-store";
 import type { ShoppingListOverview, UserProfile } from "@/lib/types";
 import { VISIBILITY_LABELS } from "@/lib/constants";
+import { formatDate } from "@/lib/utils";
 
 export function HomeClient() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -134,6 +135,7 @@ export function HomeClient() {
                 <span>{list.purchasedCount} 件が購入済み</span>
               </div>
               <div className="metric-row">
+                <span>予定日 {formatDate(list.plannedDate)}</span>
                 <span>今日 {list.dueTodayCount}</span>
                 <span>期限切れ {list.overdueCount}</span>
                 <span>通知対象 {list.reminderTodayCount}</span>

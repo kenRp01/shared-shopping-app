@@ -62,6 +62,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
           <div className="inline-badges">
             <span className="tag">{VISIBILITY_LABELS[snapshot.list.visibility]}</span>
             <span className="tag soft">{snapshot.members.length} 人で共有</span>
+            <span className="tag soft">予定日 {formatDate(snapshot.list.plannedDate)}</span>
             {snapshot.list.dailyReminderEnabled ? <span className="tag accent">毎日 {snapshot.list.dailyReminderHour}</span> : null}
           </div>
           <div className="inline-badges member-ribbon">

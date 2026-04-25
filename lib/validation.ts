@@ -14,6 +14,7 @@ export const loginSchema = z.object({
 export const createListSchema = z.object({
   name: z.string().min(1).max(50),
   description: z.string().max(140),
+  plannedDate: z.string().date().nullable(),
   visibility: z.enum(["private", "shared", "public_link"]),
   dailyReminderEnabled: z.boolean(),
   dailyReminderHour: z.string().regex(/^\d{2}:\d{2}$/),

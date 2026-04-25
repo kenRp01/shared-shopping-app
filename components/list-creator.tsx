@@ -53,6 +53,14 @@ export function ListCreator() {
         <textarea value={form.description} maxLength={140} onChange={(event) => setForm({ ...form, description: event.target.value })} />
       </label>
       <label>
+        買い物予定日
+        <input
+          type="date"
+          value={form.plannedDate ?? ""}
+          onChange={(event) => setForm({ ...form, plannedDate: event.target.value || null })}
+        />
+      </label>
+      <label>
         公開範囲
         <select value={form.visibility} onChange={(event) => setForm({ ...form, visibility: event.target.value as CreateListPayload["visibility"] })}>
           <option value="private">自分のみ</option>
