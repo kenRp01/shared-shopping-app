@@ -393,6 +393,7 @@ main {
 
 .voice-button {
   min-height: 48px;
+  width: 48px;
   padding: 0 14px;
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -405,6 +406,11 @@ main {
   background: var(--accent);
   border-color: var(--accent);
   color: white;
+}
+
+.voice-button svg {
+  width: 18px;
+  height: 18px;
 }
 
 .field-hint {
@@ -689,6 +695,10 @@ main {
   padding: 6px;
   border-radius: 18px;
   background: var(--surface-strong);
+}
+
+.list-tabs-inline {
+  margin-bottom: 4px;
 }
 
 .list-tab {

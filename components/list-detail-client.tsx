@@ -95,28 +95,25 @@ export function ListDetailClient({ listId, publicToken }: Props) {
           >
             <div className="quick-add-row">
               <div className="quick-add-title">
-                <label>
-                  商品名
-                  <div className="input-with-action">
-                    <input value={form.title} placeholder="牛乳、卵、洗剤" onChange={(event) => setForm({ ...form, title: event.target.value })} />
-                    {speech.isSupported ? (
-                      <button
-                        type="button"
-                        className={cn("voice-button", speech.isListening && "voice-button-live")}
-                        onClick={() => {
-                          if (speech.isListening) {
-                            speech.stopListening();
-                            return;
-                          }
-                          speech.startListening();
-                        }}
-                        aria-label={speech.isListening ? "音声入力を停止" : "音声入力を開始"}
-                      >
-                        {speech.isListening ? "録音中" : "音声"}
-                      </button>
-                    ) : null}
-                  </div>
-                </label>
+                <div className="input-with-action">
+                  <input value={form.title} placeholder="牛乳、卵、洗剤" aria-label="商品名" onChange={(event) => setForm({ ...form, title: event.target.value })} />
+                  {speech.isSupported ? (
+                    <button
+                      type="button"
+                      className={cn("voice-button", speech.isListening && "voice-button-live")}
+                      onClick={() => {
+                        if (speech.isListening) {
+                          speech.stopListening();
+                          return;
+                        }
+                        speech.startListening();
+                      }}
+                      aria-label={speech.isListening ? "音声入力を停止" : "音声入力を開始"}
+                    >
+                      <MicIcon />
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
               <label className="quick-add-quantity">
@@ -165,31 +162,31 @@ export function ListDetailClient({ listId, publicToken }: Props) {
       </section>
 
       <section className="panel list-section-panel">
-        <div className="list-tabs" role="tablist" aria-label="買い物リスト">
-          <button
-            type="button"
-            className={cn("list-tab", activeTab === "pending" && "list-tab-active")}
-            onClick={() => setActiveTab("pending")}
-            role="tab"
-            aria-selected={activeTab === "pending"}
-            aria-label="未購入"
-          >
-            <ListIcon />
-            <span>{pendingItems.length}</span>
-          </button>
-          <button
-            type="button"
-            className={cn("list-tab", activeTab === "purchased" && "list-tab-active")}
-            onClick={() => setActiveTab("purchased")}
-            role="tab"
-            aria-selected={activeTab === "purchased"}
-            aria-label="購入済み"
-          >
-            <CheckListIcon />
-            <span>{purchasedItems.length}</span>
-          </button>
-        </div>
         <div className="item-list item-list-stack">
+          <div className="list-tabs list-tabs-inline" role="tablist" aria-label="買い物リスト">
+            <button
+              type="button"
+              className={cn("list-tab", activeTab === "pending" && "list-tab-active")}
+              onClick={() => setActiveTab("pending")}
+              role="tab"
+              aria-selected={activeTab === "pending"}
+              aria-label="未購入"
+            >
+              <ListIcon />
+              <span>{pendingItems.length}</span>
+            </button>
+            <button
+              type="button"
+              className={cn("list-tab", activeTab === "purchased" && "list-tab-active")}
+              onClick={() => setActiveTab("purchased")}
+              role="tab"
+              aria-selected={activeTab === "purchased"}
+              aria-label="購入済み"
+            >
+              <CheckListIcon />
+              <span>{purchasedItems.length}</span>
+            </button>
+          </div>
           {(activeTab === "pending" ? pendingItems : purchasedItems).length === 0 ? <p className="empty-state">なし</p> : null}
           {(activeTab === "pending" ? pendingItems : purchasedItems).map((item) => (
             <ItemRow
@@ -246,6 +243,16 @@ function ListIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 7h10M9 12h10M9 17h10" />
       <path d="M5 7h.01M5 12h.01M5 17h.01" />
+    </svg>
+  );
+}
+
+function MicIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0" />
+      <path d="M12 18v3" />
     </svg>
   );
 }
