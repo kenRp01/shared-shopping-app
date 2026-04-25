@@ -517,10 +517,32 @@ main {
 
 .item-row-modern {
   align-items: flex-start;
+  position: relative;
+  overflow: hidden;
 }
 
 .item-list-stack {
   gap: 10px;
+}
+
+.item-row-modern::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: var(--surface-strong);
+}
+
+.item-row-today.item-row-modern::before {
+  background: var(--accent);
+}
+
+.item-row-overdue.item-row-modern::before {
+  background: #d6902e;
+}
+
+.item-row-done.item-row-modern::before {
+  background: #6ea987;
 }
 
 .item-title {
@@ -562,6 +584,38 @@ main {
 
 .list-card-modern {
   gap: 16px;
+}
+
+.quick-add-panel {
+  background:
+    radial-gradient(circle at top right, rgba(36, 106, 82, 0.12), transparent 34%),
+    linear-gradient(160deg, #fffefb, #f2f7f3);
+}
+
+.quick-add-form {
+  gap: 12px;
+}
+
+.quick-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 108px 92px;
+  gap: 10px;
+  align-items: end;
+}
+
+.quick-add-title,
+.quick-add-quantity {
+  min-width: 0;
+}
+
+.quick-add-submit {
+  width: 100%;
+}
+
+.quick-add-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .panel-header-tight {
@@ -708,6 +762,11 @@ code {
     font-size: 1.45rem;
   }
 
+  .quick-add-row,
+  .quick-add-meta {
+    grid-template-columns: 1fr;
+  }
+
   .primary-button,
   .ghost-button,
   .nav-cta {
@@ -735,6 +794,10 @@ code {
 
   .item-row {
     gap: 12px;
+  }
+
+  .item-row-modern::before {
+    width: 4px;
   }
 
   .item-main {
