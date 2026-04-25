@@ -26,6 +26,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const [snapshot, setSnapshot] = useState<ShoppingListSnapshot | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
+  const [activeTab, setActiveTab] = useState<"pending" | "purchased">("pending");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
   const [isPending, startTransition] = useTransition();
@@ -186,71 +187,31 @@ export function ListDetailClient({ listId, publicToken }: Props) {
       </section>
 
       <section className="panel list-section-panel">
-        <div className="panel-header panel-header-tight">
-          <div>
-            <p className="eyebrow">Pending</p>
-            <h2>未購入</h2>
-          </div>
+        <div className="list-tabs" role="tablist" aria-label="買い物リスト">
+          <button
+            type="button"
+            className={cn("list-tab", activeTab === "pending" && "list-tab-active")}
+            onClick={() => setActiveTab("pending")}
+            role="tab"
+            aria-selected={activeTab === "pending"}
+          >
+            未購入
+            <span>{pendingItems.length}</span>
+          </button>
+          <button
+            type="button"
+            className={cn("list-tab", activeTab === "purchased" && "list-tab-active")}
+            onClick={() => setActiveTab("purchased")}
+            role="tab"
+            aria-selected={activeTab === "purchased"}
+          >
+            購入済み
+            <span>{purchasedItems.length}</span>
+          </button>
         </div>
         <div className="item-list item-list-stack">
-          {pendingItems.length === 0 ? <p className="empty-state">なし</p> : null}
-          {pendingItems.map((item) => (
-            <ItemRow
-              item={item}
-              key={item.id}
-              editable={snapshot.permission === "edit" && !publicToken}
-              onToggle={async () => {
-                if (!user) return;
-                await toggleItemStatus(snapshot.list.id, item.id, user);
-                await refresh(user);
-              }}
-              onRemove={async () => {
-                if (!user) return;
-                await removeItem(snapshot.list.id, item.id, user);
-                await refresh(user);
-              }}
-              onEdit={
-                snapshot.permission === "edit" && !publicToken
-                  ? async (payload) => {
-                      if (!user) return;
-                      await updateItem(snapshot.list.id, item.id, user, payload);
-                      setEditingItemId(null);
-                      await refresh(user);
-                    }
-                  : undefined
-              }
-              editing={editingItemId === item.id}
-              onStartEdit={() => {
-                setEditingItemId(item.id);
-                setEditForm({
-                  title: item.title,
-                  quantity: item.quantity,
-                  note: item.note,
-                  scope: item.scope,
-                  dueDate: item.dueDate,
-                  dueTime: item.dueTime,
-                  remindOn: item.remindOn,
-                  reminderEnabled: item.reminderEnabled,
-                });
-              }}
-              onCancelEdit={() => setEditingItemId(null)}
-              editForm={editForm}
-              setEditForm={setEditForm}
-            />
-          ))}
-        </div>
-      </section>
-
-      <section className="panel list-section-panel">
-        <div className="panel-header panel-header-tight">
-          <div>
-            <p className="eyebrow">Purchased</p>
-            <h2>購入済み</h2>
-          </div>
-        </div>
-        <div className="item-list item-list-stack">
-          {purchasedItems.length === 0 ? <p className="empty-state">なし</p> : null}
-          {purchasedItems.map((item) => (
+          {(activeTab === "pending" ? pendingItems : purchasedItems).length === 0 ? <p className="empty-state">なし</p> : null}
+          {(activeTab === "pending" ? pendingItems : purchasedItems).map((item) => (
             <ItemRow
               item={item}
               key={item.id}

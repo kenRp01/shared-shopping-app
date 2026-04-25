@@ -646,6 +646,47 @@ main {
   gap: 10px;
 }
 
+.list-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 6px;
+  border-radius: 18px;
+  background: var(--surface-strong);
+}
+
+.list-tab {
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.list-tab span {
+  min-width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: white;
+  color: var(--ink);
+  font-size: 0.86rem;
+}
+
+.list-tab-active {
+  background: white;
+  color: var(--ink);
+  box-shadow: 0 8px 20px rgba(27, 42, 65, 0.08);
+}
+
 .panel-header-tight {
   align-items: center;
 }
