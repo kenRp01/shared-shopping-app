@@ -26,7 +26,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const [snapshot, setSnapshot] = useState<ShoppingListSnapshot | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
-  const [activeTab, setActiveTab] = useState<"pending" | "purchased">("pending");
+  const [showPurchased, setShowPurchased] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
   const [isPending, startTransition] = useTransition();
@@ -136,20 +136,10 @@ export function ListDetailClient({ listId, publicToken }: Props) {
         <div>
           <div className="inline-badges inline-badges-tight inline-badges-scroll">
             <span className="tag">{VISIBILITY_LABELS[snapshot.list.visibility]}</span>
-            <span className="tag soft">{snapshot.members.length} 人で共有</span>
-            <span className="tag soft">予定日 {formatDate(snapshot.list.plannedDate)}</span>
-            {snapshot.list.dailyReminderEnabled ? <span className="tag accent">毎日 {snapshot.list.dailyReminderHour}</span> : null}
-          </div>
-          <div className="inline-badges member-ribbon inline-badges-scroll">
-            {snapshot.members.map((member) => (
-              <span className="name-badge soft" key={member.id}>
-                {member.name}
-                {member.role === "owner" ? " / 所有者" : ""}
-              </span>
-            ))}
+            <span className="tag soft">{snapshot.members.length} 人</span>
+            {snapshot.list.plannedDate ? <span className="tag soft">{formatDate(snapshot.list.plannedDate)}</span> : null}
           </div>
           <h2>{snapshot.list.name}</h2>
-          {snapshot.list.description ? <p className="lead-copy">{snapshot.list.description}</p> : null}
         </div>
         {publicToken ? null : (
           <div className="card-actions">
@@ -162,33 +152,18 @@ export function ListDetailClient({ listId, publicToken }: Props) {
       </section>
 
       <section className="panel list-section-panel">
-        <div className="list-tabs" role="tablist" aria-label="買い物リスト">
-          <button
-            type="button"
-            className={cn("list-tab", activeTab === "pending" && "list-tab-active")}
-            onClick={() => setActiveTab("pending")}
-            role="tab"
-            aria-selected={activeTab === "pending"}
-            aria-label="未購入"
-          >
-            <ListIcon />
-            <span>{pendingItems.length}</span>
-          </button>
-          <button
-            type="button"
-            className={cn("list-tab", activeTab === "purchased" && "list-tab-active")}
-            onClick={() => setActiveTab("purchased")}
-            role="tab"
-            aria-selected={activeTab === "purchased"}
-            aria-label="購入済み"
-          >
-            <CheckListIcon />
-            <span>{purchasedItems.length}</span>
-          </button>
+        <div className="list-section-head">
+          <span className="metric-pill strong">未購入 {pendingItems.length}</span>
+          {purchasedItems.length ? (
+            <button type="button" className="ghost-button list-toggle-button" onClick={() => setShowPurchased((current) => !current)}>
+              <CheckListIcon />
+              <span>{purchasedItems.length}</span>
+            </button>
+          ) : null}
         </div>
         <div className="item-list item-list-stack">
-          {(activeTab === "pending" ? pendingItems : purchasedItems).length === 0 ? <p className="empty-state">なし</p> : null}
-          {(activeTab === "pending" ? pendingItems : purchasedItems).map((item) => (
+          {pendingItems.length === 0 ? <p className="empty-state">なし</p> : null}
+          {pendingItems.map((item) => (
             <ItemRow
               item={item}
               key={item.id}
@@ -233,6 +208,56 @@ export function ListDetailClient({ listId, publicToken }: Props) {
             />
           ))}
         </div>
+        {showPurchased && purchasedItems.length ? (
+          <div className="purchased-drawer">
+            <div className="item-list item-list-stack">
+              {purchasedItems.map((item) => (
+                <ItemRow
+                  item={item}
+                  key={item.id}
+                  editable={snapshot.permission === "edit" && !publicToken}
+                  onToggle={async () => {
+                    if (!user) return;
+                    await toggleItemStatus(snapshot.list.id, item.id, user);
+                    await refresh(user);
+                  }}
+                  onRemove={async () => {
+                    if (!user) return;
+                    await removeItem(snapshot.list.id, item.id, user);
+                    await refresh(user);
+                  }}
+                  onEdit={
+                    snapshot.permission === "edit" && !publicToken
+                      ? async (payload) => {
+                          if (!user) return;
+                          await updateItem(snapshot.list.id, item.id, user, payload);
+                          setEditingItemId(null);
+                          await refresh(user);
+                        }
+                      : undefined
+                  }
+                  editing={editingItemId === item.id}
+                  onStartEdit={() => {
+                    setEditingItemId(item.id);
+                    setEditForm({
+                      title: item.title,
+                      quantity: item.quantity,
+                      note: item.note,
+                      scope: item.scope,
+                      dueDate: item.dueDate,
+                      dueTime: item.dueTime,
+                      remindOn: item.remindOn,
+                      reminderEnabled: item.reminderEnabled,
+                    });
+                  }}
+                  onCancelEdit={() => setEditingItemId(null)}
+                  editForm={editForm}
+                  setEditForm={setEditForm}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   );
@@ -246,7 +271,6 @@ function ListIcon() {
     </svg>
   );
 }
-
 function MicIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
@@ -317,12 +341,10 @@ function ItemRow({
             <span>{item.quantity}</span>
           </div>
           {item.note ? <p>{item.note}</p> : null}
-          <div className="inline-badges inline-badges-tight">
-            <span className={`tag ${item.scope === "personal" ? "" : "soft"}`}>{ITEM_SCOPE_LABELS[item.scope]}</span>
-            <span className="name-badge">{item.createdByName}</span>
-            {item.purchasedByName ? <span className="name-badge soft">購入 {item.purchasedByName}</span> : null}
-            <span className="tag soft">{formatDate(item.dueDate)}</span>
-            {item.reminderEnabled ? <span className="tag accent">通知 {formatDate(item.remindOn ?? item.dueDate)}</span> : null}
+          <div className="item-meta-line">
+            {item.scope === "personal" ? <span className="item-meta-chip">{ITEM_SCOPE_LABELS[item.scope]}</span> : null}
+            <span className="item-meta-text">{item.createdByName}</span>
+            {item.dueDate ? <span className="item-meta-text">{formatDate(item.dueDate)}</span> : null}
           </div>
         </div>
         {editable ? (

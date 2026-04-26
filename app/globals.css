@@ -632,6 +632,26 @@ main {
   flex-wrap: wrap;
 }
 
+.item-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.item-meta-chip,
+.item-meta-text {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.item-meta-chip {
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--surface-strong);
+}
+
 .metric-pills {
   display: flex;
   gap: 8px;
@@ -769,6 +789,29 @@ main {
 
 .member-cluster {
   gap: 8px;
+}
+
+.list-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.list-toggle-button {
+  gap: 10px;
+}
+
+.list-toggle-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.purchased-drawer {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 
 .item-actions {
@@ -926,8 +969,10 @@ code {
   }
 
   .item-row-top,
-  .item-edit-actions {
+  .item-edit-actions,
+  .list-section-head {
     flex-direction: column;
+    align-items: stretch;
   }
 
   .item-edit-grid {
