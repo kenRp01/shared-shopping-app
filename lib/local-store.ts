@@ -75,6 +75,7 @@ async function getDb() {
     },
   });
   await ensureSeeded(db);
+  await migrateLegacyDemoData(db);
   return db;
 }
 
@@ -90,12 +91,12 @@ async function ensureSeeded(db: Awaited<ReturnType<typeof openDB<ShoppingDb>>>) 
     createdAt: now,
   }));
 
-  const listId = "list_demo_weekend";
-  const publicToken = "demo-weekend-board";
+  const listId = "list_demo_shared";
+  const publicToken = "demo-shared-board";
   const list: ShoppingList = {
     id: listId,
-    name: "週末まとめ買い",
-    description: "夕食と日用品をまとめて確認する共有リスト",
+    name: "共有買い物",
+    description: "日用品と食材を一緒に確認する共有リスト",
     plannedDate: todayKey(),
     visibility: "public_link",
     ownerUserId: users[0].id,
@@ -188,6 +189,39 @@ async function ensureSeeded(db: Awaited<ReturnType<typeof openDB<ShoppingDb>>>) 
   await Promise.all(members.map((member) => tx.objectStore("members").put(member)));
   await Promise.all(items.map((item) => tx.objectStore("items").put(item)));
   await tx.done;
+}
+
+async function migrateLegacyDemoData(db: Awaited<ReturnType<typeof openDB<ShoppingDb>>>) {
+  const list = await db.get("lists", "list_demo_weekend");
+  if (!list) {
+    return;
+  }
+
+  await db.put("lists", {
+    ...list,
+    id: "list_demo_shared",
+    publicToken: "demo-shared-board",
+    name: "共有買い物",
+    description: "日用品と食材を一緒に確認する共有リスト",
+    updatedAt: new Date().toISOString(),
+  });
+  await db.delete("lists", "list_demo_weekend");
+
+  const members = (await db.getAll("members")).filter((entry) => entry.listId === "list_demo_weekend");
+  for (const member of members) {
+    await db.put("members", {
+      ...member,
+      listId: "list_demo_shared",
+    });
+  }
+
+  const items = (await db.getAll("items")).filter((entry) => entry.listId === "list_demo_weekend");
+  for (const item of items) {
+    await db.put("items", {
+      ...item,
+      listId: "list_demo_shared",
+    });
+  }
 }
 
 function toProfile(user: UserRecord): UserProfile {

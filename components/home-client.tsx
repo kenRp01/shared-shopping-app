@@ -73,11 +73,8 @@ export function HomeClient() {
 
       <section className="panel list-overview-panel">
         <div className="panel-header panel-header-tight">
-          <div>
-            <p className="eyebrow">My Lists</p>
-            <h2>リスト</h2>
-          </div>
-          <Link href="/lists/new" className="primary-button">新しいリスト</Link>
+          <div />
+          <Link href="/lists/new" className="ghost-button compact-button">新しいリスト</Link>
         </div>
         <div className="list-overview-grid">
           {lists.map((list) => (
