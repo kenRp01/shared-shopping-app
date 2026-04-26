@@ -374,6 +374,14 @@ main {
   padding: 0;
 }
 
+.nav-add-link {
+  min-width: 72px;
+  padding: 0 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .feature-panel h3,
 .list-card h3 {
   margin-bottom: 6px;
@@ -695,10 +703,6 @@ main {
   padding: 6px;
   border-radius: 18px;
   background: var(--surface-strong);
-}
-
-.list-tabs-inline {
-  margin-bottom: 4px;
 }
 
 .list-tab {

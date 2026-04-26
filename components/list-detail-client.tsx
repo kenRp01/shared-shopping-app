@@ -162,31 +162,31 @@ export function ListDetailClient({ listId, publicToken }: Props) {
       </section>
 
       <section className="panel list-section-panel">
+        <div className="list-tabs" role="tablist" aria-label="買い物リスト">
+          <button
+            type="button"
+            className={cn("list-tab", activeTab === "pending" && "list-tab-active")}
+            onClick={() => setActiveTab("pending")}
+            role="tab"
+            aria-selected={activeTab === "pending"}
+            aria-label="未購入"
+          >
+            <ListIcon />
+            <span>{pendingItems.length}</span>
+          </button>
+          <button
+            type="button"
+            className={cn("list-tab", activeTab === "purchased" && "list-tab-active")}
+            onClick={() => setActiveTab("purchased")}
+            role="tab"
+            aria-selected={activeTab === "purchased"}
+            aria-label="購入済み"
+          >
+            <CheckListIcon />
+            <span>{purchasedItems.length}</span>
+          </button>
+        </div>
         <div className="item-list item-list-stack">
-          <div className="list-tabs list-tabs-inline" role="tablist" aria-label="買い物リスト">
-            <button
-              type="button"
-              className={cn("list-tab", activeTab === "pending" && "list-tab-active")}
-              onClick={() => setActiveTab("pending")}
-              role="tab"
-              aria-selected={activeTab === "pending"}
-              aria-label="未購入"
-            >
-              <ListIcon />
-              <span>{pendingItems.length}</span>
-            </button>
-            <button
-              type="button"
-              className={cn("list-tab", activeTab === "purchased" && "list-tab-active")}
-              onClick={() => setActiveTab("purchased")}
-              role="tab"
-              aria-selected={activeTab === "purchased"}
-              aria-label="購入済み"
-            >
-              <CheckListIcon />
-              <span>{purchasedItems.length}</span>
-            </button>
-          </div>
           {(activeTab === "pending" ? pendingItems : purchasedItems).length === 0 ? <p className="empty-state">なし</p> : null}
           {(activeTab === "pending" ? pendingItems : purchasedItems).map((item) => (
             <ItemRow

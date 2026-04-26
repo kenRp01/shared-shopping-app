@@ -17,11 +17,8 @@ export function Nav() {
     <header className="topbar">
       <Logo />
       <nav className="topnav">
-        <Link href="/" className="nav-icon-link" aria-label="ホーム" title="ホーム">
-          <HomeIcon />
-        </Link>
-        <Link href="/lists/new" className="nav-icon-link" aria-label="新しいリスト" title="新しいリスト">
-          <PlusIcon />
+        <Link href="/lists/new" className="nav-pill nav-add-link" aria-label="add" title="add">
+          add
         </Link>
         {user ? (
           <>
@@ -46,30 +43,13 @@ export function Nav() {
             <Link href="/login" className="nav-icon-link" aria-label="ログイン" title="ログイン">
               <LoginIcon />
             </Link>
-            <Link href="/signup" className="nav-cta nav-icon-link" aria-label="新規登録" title="新規登録">
-              <PlusIcon />
+            <Link href="/signup" className="nav-cta nav-add-link" aria-label="add" title="add">
+              add
             </Link>
           </>
         )}
       </nav>
     </header>
-  );
-}
-
-function HomeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 10.5 12 4l9 6.5" />
-      <path d="M5.5 9.5V20h13V9.5" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
-      <path d="M12 5v14M5 12h14" />
-    </svg>
   );
 }
 
