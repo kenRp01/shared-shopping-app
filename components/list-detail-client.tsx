@@ -63,6 +63,13 @@ export function ListDetailClient({ listId, publicToken }: Props) {
 
   const pendingItems = snapshot?.items.filter((item) => item.status === "pending") ?? [];
 
+  function parseQuickAddTitles(value: string) {
+    return value
+      .split(/[\n,、]+/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
   if (!snapshot) {
     return (
       <section className="panel">
@@ -83,9 +90,22 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                   if (!user) {
                     throw new Error("ログインが必要です。");
                   }
-                  await createItem(snapshot.list.id, user, form);
+                  const titles = parseQuickAddTitles(form.title);
+                  if (titles.length === 0) {
+                    throw new Error("商品名を入力してください。");
+                  }
+                  await Promise.all(
+                    titles.map((title) =>
+                      createItem(snapshot.list.id, user, {
+                        ...form,
+                        title,
+                      }),
+                    ),
+                  );
                   setForm((current) => ({
                     ...DEFAULT_ITEM_FORM,
+                    title: "",
+                    quantity: current.quantity,
                     scope: current.scope,
                     dueDate: current.dueDate,
                     dueTime: current.dueTime,
@@ -143,21 +163,15 @@ export function ListDetailClient({ listId, publicToken }: Props) {
         </section>
       ) : null}
 
-      <section className="panel detail-hero detail-hero-compact">
-        <div>
-          <h2>{snapshot.list.name}</h2>
-          <div className="list-card-subline">
-            <span>{VISIBILITY_LABELS[snapshot.list.visibility]}</span>
-          </div>
-        </div>
-        {publicToken ? null : (
-          <div className="card-actions">
-            <Link href={`/lists/${snapshot.list.id}/settings`} className="ghost-button">共有設定</Link>
-          </div>
-        )}
-      </section>
-
       <section className="panel list-section-panel">
+        <div className="detail-inline-head">
+          <h2>{snapshot.list.name}</h2>
+          {publicToken ? null : (
+            <Link href={`/lists/${snapshot.list.id}/settings`} className="ghost-button compact-button">
+              {VISIBILITY_LABELS[snapshot.list.visibility]}
+            </Link>
+          )}
+        </div>
         <div className="item-list item-list-stack">
           {pendingItems.length === 0 ? <p className="empty-state">なし</p> : null}
           {pendingItems.map((item) => (
