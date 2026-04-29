@@ -571,6 +571,16 @@ main {
 
 .item-main {
   flex: 1;
+  min-width: 0;
+}
+
+.item-main-button {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
 }
 
 .item-row.item-row-today {
@@ -598,7 +608,7 @@ main {
 .item-row-top {
   display: flex;
   gap: 16px;
-  align-items: flex-start;
+  align-items: center;
   width: 100%;
 }
 
@@ -627,13 +637,25 @@ main {
 }
 
 .item-title {
-  grid-template-columns: 1fr auto;
+  display: flex;
   align-items: center;
+  gap: 12px;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.item-title strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .item-title span {
   color: var(--muted);
   font-size: 0.92rem;
+  flex: 0 0 auto;
 }
 
 .item-edit-form {
@@ -846,10 +868,6 @@ main {
   margin: 0;
 }
 
-.item-actions {
-  justify-content: flex-end;
-}
-
 .item-row-modern {
   border-color: rgba(36, 106, 82, 0.14);
   background: white;
@@ -1040,7 +1058,6 @@ code {
     gap: 12px;
   }
 
-  .item-row-top,
   .item-edit-actions,
   .detail-inline-head {
     flex-direction: column;

@@ -162,11 +162,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                   setMessage(error instanceof Error ? error.message : "更新できませんでした。");
                 }
               }}
-              onRemove={async () => {
-                if (!user) return;
-                await removeItem(snapshot.list.id, item.id, user);
-                await refresh(user);
-              }}
               onEdit={
                 snapshot.permission === "edit" && !publicToken
                   ? async (payload) => {
@@ -206,7 +201,6 @@ function ItemRow({
   item,
   editable,
   onToggle,
-  onRemove,
   onEdit,
   editing,
   onStartEdit,
@@ -217,7 +211,6 @@ function ItemRow({
   item: ShoppingItemView;
   editable: boolean;
   onToggle: () => Promise<void>;
-  onRemove?: () => Promise<void>;
   onEdit?: (payload: CreateItemPayload) => Promise<void>;
   editing: boolean;
   onStartEdit: () => void;
@@ -246,7 +239,13 @@ function ItemRow({
             <span className="item-check-ui checked" />
           </span>
         ) : null}
-        <div className="item-main">
+        <button
+          type="button"
+          className="item-main item-main-button"
+          onClick={editable && !editing ? onStartEdit : undefined}
+          disabled={!editable || editing}
+          aria-label={editable ? `${item.title} を編集` : item.title}
+        >
           <div className="item-title">
             <strong>{item.title}</strong>
             <span>{item.quantity}</span>
@@ -257,19 +256,7 @@ function ItemRow({
             <span className="item-meta-text">{item.createdByName}</span>
             {item.dueDate ? <span className="item-meta-text">{formatDate(item.dueDate)}</span> : null}
           </div>
-        </div>
-        {editable ? (
-          <div className="item-actions">
-            <button type="button" className="ghost-button" onClick={onStartEdit}>
-              編集
-            </button>
-            {onRemove ? (
-              <button type="button" className="ghost-button danger" onClick={() => void onRemove()}>
-                削除
-              </button>
-            ) : null}
-          </div>
-        ) : null}
+        </button>
       </div>
       {editing && onEdit ? (
         <form
