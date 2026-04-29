@@ -324,6 +324,12 @@ main {
   font-size: 0.84rem;
 }
 
+.compact-button-accent {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
 .primary-button,
 .nav-cta {
   background: var(--ink);
@@ -687,6 +693,9 @@ main {
 
 .list-card-modern {
   gap: 16px;
+  background:
+    linear-gradient(180deg, rgba(223, 242, 232, 0.72), rgba(255, 253, 249, 0.98));
+  border-color: rgba(36, 106, 82, 0.16);
 }
 
 .quick-add-panel {
@@ -797,6 +806,12 @@ main {
   gap: 8px;
 }
 
+.list-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
 .list-section-head {
   display: flex;
   align-items: center;
@@ -822,6 +837,21 @@ main {
 
 .item-actions {
   justify-content: flex-end;
+}
+
+.item-row-modern {
+  border-color: rgba(36, 106, 82, 0.14);
+}
+
+.item-check-ui {
+  border-color: rgba(36, 106, 82, 0.28);
+  box-shadow: 0 0 0 4px rgba(223, 242, 232, 0.48);
+}
+
+.item-check input:checked + .item-check-ui,
+.item-check-ui.checked {
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .empty-state {

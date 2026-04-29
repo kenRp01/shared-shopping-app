@@ -66,9 +66,8 @@ export function HomeClient() {
   return (
     <div className="page-grid home-shell">
       <section className="panel list-overview-panel">
-        <div className="panel-header panel-header-tight">
-          <div />
-          <Link href="/lists/new" className="ghost-button compact-button">新しいリスト</Link>
+        <div className="list-toolbar">
+          <Link href="/lists/new" className="primary-button compact-button compact-button-accent">新しいリスト</Link>
         </div>
         <div className="list-overview-grid">
           {lists.length === 0 ? <p className="empty-state">なし</p> : null}
