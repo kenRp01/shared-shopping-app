@@ -40,9 +40,6 @@ export function Nav() {
             <Link href="/login" className="nav-icon-link" aria-label="ログイン" title="ログイン">
               <LoginIcon />
             </Link>
-            <Link href="/signup" className="nav-cta nav-signup-link" aria-label="signup" title="signup">
-              signup
-            </Link>
           </>
         )}
       </nav>
