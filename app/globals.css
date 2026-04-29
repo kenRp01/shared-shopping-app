@@ -822,7 +822,7 @@ main {
 
 .list-create-inline {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 180px auto;
+  grid-template-columns: minmax(0, 1fr) 160px auto;
   gap: 10px;
   align-items: center;
   margin-bottom: 18px;
@@ -888,15 +888,15 @@ code {
 
 @media (max-width: 720px) {
   .page-shell {
-    padding: 12px;
-    padding-bottom: 32px;
+    padding: 10px;
+    padding-bottom: 24px;
   }
 
   .topbar {
-    margin-bottom: 14px;
-    padding: 12px 14px;
-    border-radius: 20px;
-    gap: 14px;
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border-radius: 18px;
+    gap: 10px;
   }
 
   .topnav {
@@ -935,8 +935,8 @@ code {
   .list-overview-panel,
   .list-section-panel,
   .feature-panel-compact {
-    padding: 18px;
-    border-radius: 22px;
+    padding: 14px;
+    border-radius: 18px;
   }
 
   .home-shell,
@@ -945,7 +945,7 @@ code {
   .card-grid,
   .list-overview-grid,
   .section-stack {
-    gap: 12px;
+    gap: 10px;
   }
 
   .hero-copy {
@@ -988,22 +988,19 @@ code {
     font-size: 1.45rem;
   }
 
-  .quick-add-row,
-  .quick-add-meta {
-    grid-template-columns: 1fr;
-  }
-
   .primary-button,
   .ghost-button,
   .nav-cta {
-    min-height: 46px;
+    min-height: 38px;
+    padding: 0 14px;
+    font-size: 0.92rem;
   }
 
   .card-actions .primary-button,
   .card-actions .ghost-button,
   .hero-actions .primary-button,
   .hero-actions .ghost-button {
-    flex: 1 1 calc(50% - 4px);
+    flex: 0 0 auto;
   }
 
   .panel-header-tight {
@@ -1014,8 +1011,8 @@ code {
   .item-row,
   .demo-row,
   .member-row {
-    padding: 14px;
-    border-radius: 18px;
+    padding: 12px;
+    border-radius: 16px;
   }
 
   .item-row {
@@ -1051,11 +1048,11 @@ code {
 
   .item-actions {
     width: 100%;
-    justify-content: stretch;
+    justify-content: flex-start;
   }
 
   .item-actions .ghost-button {
-    width: 100%;
+    width: auto;
   }
 
   .aside-panel {
@@ -1064,16 +1061,26 @@ code {
   }
 
   .form-panel {
-    gap: 12px;
+    gap: 10px;
   }
 
   .input-with-action {
     grid-template-columns: 1fr;
   }
 
+  .quick-add-row {
+    grid-template-columns: minmax(0, 1fr) 90px 78px;
+    gap: 8px;
+  }
+
+  .quick-add-title .input-with-action {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
   .voice-button {
-    width: 100%;
-    min-height: 44px;
+    width: 42px;
+    min-height: 42px;
+    padding: 0;
   }
 
   .checkbox-row {
@@ -1082,6 +1089,18 @@ code {
 
   .checkbox-row input {
     margin-top: 3px;
+  }
+
+  .list-create-inline {
+    grid-template-columns: minmax(0, 1fr) 126px 72px;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .compact-button {
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 0.8rem;
   }
 }
 
@@ -1109,8 +1128,8 @@ code {
   input,
   select,
   textarea {
-    padding: 13px 14px;
-    border-radius: 14px;
+    padding: 11px 12px;
+    border-radius: 12px;
   }
 
   .summary-strip,
@@ -1124,15 +1143,16 @@ code {
 
   .card-actions,
   .hero-actions {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 
   .card-actions .primary-button,
   .card-actions .ghost-button,
   .hero-actions .primary-button,
   .hero-actions .ghost-button {
-    width: 100%;
-    flex: 1 1 auto;
+    width: auto;
+    flex: 0 0 auto;
   }
 
   .item-row,
@@ -1154,14 +1174,26 @@ code {
   }
 
   .metric-pill {
-    min-height: 30px;
-    padding: 0 10px;
-    font-size: 0.83rem;
+    min-height: 28px;
+    padding: 0 8px;
+    font-size: 0.78rem;
   }
 
   .member-row .tag,
   .demo-row code,
   .nav-pill {
     align-self: flex-start;
+  }
+
+  .list-create-inline {
+    grid-template-columns: minmax(0, 1fr) 102px 64px;
+  }
+
+  .quick-add-row {
+    grid-template-columns: minmax(0, 1fr) 76px 70px;
+  }
+
+  .detail-hero .card-actions {
+    margin-top: 10px;
   }
 }
