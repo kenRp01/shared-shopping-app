@@ -583,6 +583,13 @@ main {
   cursor: pointer;
 }
 
+.item-main-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
 .item-row.item-row-today {
   background: var(--accent-soft);
 }
@@ -597,6 +604,14 @@ main {
 
 .item-row.item-row-done .item-title strong {
   text-decoration: line-through;
+}
+
+.item-row-shared {
+  background: rgba(223, 242, 232, 0.72);
+}
+
+.item-row-personal {
+  background: rgba(255, 228, 222, 0.62);
 }
 
 .item-row-modern {
@@ -636,6 +651,14 @@ main {
   background: #6ea987;
 }
 
+.item-row-shared.item-row-modern::before {
+  background: #2f8f6a;
+}
+
+.item-row-personal.item-row-modern::before {
+  background: #d97563;
+}
+
 .item-title {
   display: flex;
   align-items: center;
@@ -652,7 +675,7 @@ main {
   white-space: nowrap;
 }
 
-.item-title span {
+.item-quantity {
   color: var(--muted);
   font-size: 0.92rem;
   flex: 0 0 auto;
@@ -686,17 +709,9 @@ main {
   align-items: center;
 }
 
-.item-meta-chip,
 .item-meta-text {
   color: var(--muted);
   font-size: 0.84rem;
-}
-
-.item-meta-chip {
-  min-height: 24px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: var(--surface-strong);
 }
 
 .metric-pills {

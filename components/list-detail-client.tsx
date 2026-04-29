@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, useTransition, type Dispatch, type SetStateAction } from "react";
-import { DEFAULT_ITEM_FORM, DEFAULT_LIST_FORM, ITEM_SCOPE_LABELS, VISIBILITY_LABELS } from "@/lib/constants";
+import { DEFAULT_ITEM_FORM, DEFAULT_LIST_FORM } from "@/lib/constants";
 import {
   createList,
   createItem,
@@ -163,7 +163,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
           <h2>{snapshot.list.name}</h2>
           {publicToken ? null : (
             <Link href={`/lists/${snapshot.list.id}/settings`} className="ghost-button compact-button">
-              {VISIBILITY_LABELS[snapshot.list.visibility]}
+              設定
             </Link>
           )}
         </div>
@@ -272,7 +272,15 @@ function ItemRow({
   const [editMessage, setEditMessage] = useState<string | null>(null);
 
   return (
-    <article className={cn("item-row item-row-modern", item.status === "purchased" && "item-row-done", item.dueState === "today" && "item-row-today", item.dueState === "overdue" && "item-row-overdue")}>
+    <article
+      className={cn(
+        "item-row item-row-modern",
+        item.scope === "shared" ? "item-row-shared" : "item-row-personal",
+        item.status === "purchased" && "item-row-done",
+        item.dueState === "today" && "item-row-today",
+        item.dueState === "overdue" && "item-row-overdue",
+      )}
+    >
       <div className="item-row-top">
         {editable ? (
           <label className="item-check">
@@ -296,13 +304,14 @@ function ItemRow({
           disabled={!editable || editing}
           aria-label={editable ? `${item.title} を編集` : item.title}
         >
-          <div className="item-title">
-            <strong>{item.title}</strong>
-            <span>{item.quantity}</span>
+          <div className="item-main-head">
+            <div className="item-title">
+              <strong>{item.title}</strong>
+            </div>
+            <span className="item-quantity">{item.quantity}</span>
           </div>
           {item.note ? <p>{item.note}</p> : null}
           <div className="item-meta-line">
-            {item.scope === "personal" ? <span className="item-meta-chip">{ITEM_SCOPE_LABELS[item.scope]}</span> : null}
             <span className="item-meta-text">{item.createdByName}</span>
             {item.dueDate ? <span className="item-meta-text">{formatDate(item.dueDate)}</span> : null}
           </div>
