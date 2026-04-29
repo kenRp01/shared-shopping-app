@@ -39,7 +39,7 @@ export function HomeClient() {
             <h2>共有買い物リスト</h2>
           </div>
           <div className="hero-actions">
-            <Link href="/signup" className="primary-button">無料で始める</Link>
+            <Link href="/signup" className="primary-button">新規登録</Link>
             <Link href="/login" className="ghost-button">ログイン</Link>
           </div>
           <div className="status-ribbon">

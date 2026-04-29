@@ -75,7 +75,7 @@ export function AuthForm({ mode }: Props) {
         </label>
         {message ? <p className="notice-inline">{message}</p> : null}
         <button type="submit" className="primary-button" disabled={isPending}>
-          {isPending ? "処理中..." : mode === "login" ? "ログインする" : "無料で始める"}
+          {isPending ? "処理中..." : mode === "login" ? "ログインする" : "新規登録"}
         </button>
         <p className="compact-copy">
           {mode === "login" ? "アカウントがまだない場合は " : "すでに登録済みなら "}

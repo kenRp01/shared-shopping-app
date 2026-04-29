@@ -15,7 +15,9 @@ export function Nav() {
 
   return (
     <header className="topbar">
-      <Logo />
+      <Link href="/" aria-label="トップへ戻る">
+        <Logo />
+      </Link>
       <nav className="topnav">
         {user ? (
           <>
