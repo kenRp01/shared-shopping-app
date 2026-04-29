@@ -391,7 +391,7 @@ export async function continueAsGuest() {
 
   const starter = await createList(profile, {
     ...DEFAULT_LIST_FORM,
-    name: "買い物",
+    name: "マイリスト",
     plannedDate: null,
     visibility: "private",
   });

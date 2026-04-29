@@ -100,7 +100,7 @@ export function HomeClient() {
                     }
                     const list = await createList(user, {
                       ...DEFAULT_LIST_FORM,
-                      name: "買い物",
+                      name: "マイリスト",
                       plannedDate: null,
                       visibility: "private",
                     });
