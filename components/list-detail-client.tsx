@@ -11,7 +11,6 @@ import {
   removeItem,
   updateItem,
 } from "@/lib/local-store";
-import { useSpeechInput } from "@/lib/use-speech-input";
 import type { CreateItemPayload, ShoppingItemView, ShoppingListSnapshot, UserProfile } from "@/lib/types";
 import { cn, formatDate } from "@/lib/utils";
 
@@ -28,13 +27,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
   const [isPending, startTransition] = useTransition();
-  const speech = useSpeechInput((transcript) => {
-    setForm((current) => ({
-      ...current,
-      title: current.title ? `${current.title} ${transcript}`.trim() : transcript,
-    }));
-    setMessage(null);
-  });
 
   async function refresh(currentUser?: UserProfile | null) {
     const nextUser = currentUser ?? (await getCurrentUser());
@@ -122,25 +114,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
           >
             <div className="quick-add-row">
               <div className="quick-add-title">
-                <div className="input-with-action">
-                  <input value={form.title} placeholder="牛乳、卵、洗剤" aria-label="商品名" onChange={(event) => setForm({ ...form, title: event.target.value })} />
-                  {speech.isSupported ? (
-                    <button
-                      type="button"
-                      className={cn("voice-button", speech.isListening && "voice-button-live")}
-                      onClick={() => {
-                        if (speech.isListening) {
-                          speech.stopListening();
-                          return;
-                        }
-                        speech.startListening();
-                      }}
-                      aria-label={speech.isListening ? "音声入力を停止" : "音声入力を開始"}
-                    >
-                      <MicIcon />
-                    </button>
-                  ) : null}
-                </div>
+                <input value={form.title} placeholder="牛乳、卵、洗剤" aria-label="商品名" onChange={(event) => setForm({ ...form, title: event.target.value })} />
               </div>
 
               <label className="quick-add-quantity quick-add-quantity-inline">
@@ -156,8 +130,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                 {isPending ? "追加中..." : "追加"}
               </button>
             </div>
-
-            {speech.error ? <p className="notice-inline">{speech.error}</p> : null}
             {message ? <p className="notice-inline">{message}</p> : null}
           </form>
         </section>
@@ -227,15 +199,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
         </div>
       </section>
     </div>
-  );
-}
-function MicIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="3" width="6" height="11" rx="3" />
-      <path d="M5 11a7 7 0 0 0 14 0" />
-      <path d="M12 18v3" />
-    </svg>
   );
 }
 
