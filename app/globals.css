@@ -822,6 +822,8 @@ main {
 
 .list-toggle-button {
   gap: 10px;
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .list-toggle-button svg {

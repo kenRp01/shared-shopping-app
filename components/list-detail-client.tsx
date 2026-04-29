@@ -156,7 +156,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
           <span className="metric-pill strong">未購入 {pendingItems.length}</span>
           {purchasedItems.length ? (
             <button type="button" className="ghost-button list-toggle-button" onClick={() => setShowPurchased((current) => !current)}>
-              <CheckListIcon />
+              購入済み
               <span>{purchasedItems.length}</span>
             </button>
           ) : null}
@@ -277,16 +277,6 @@ function MicIcon() {
       <rect x="9" y="3" width="6" height="11" rx="3" />
       <path d="M5 11a7 7 0 0 0 14 0" />
       <path d="M12 18v3" />
-    </svg>
-  );
-}
-
-function CheckListIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m4.5 7 1.8 1.8L9 6" />
-      <path d="m4.5 12 1.8 1.8L9 11" />
-      <path d="M11 7h9M11 12h9M11 17h9" />
     </svg>
   );
 }
