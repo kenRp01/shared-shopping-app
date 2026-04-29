@@ -1,15 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { getCurrentUser, getDemoCredentials, listAccessibleLists } from "@/lib/local-store";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
+import { DEFAULT_LIST_FORM } from "@/lib/constants";
+import { createList, getCurrentUser, getDemoCredentials, listAccessibleLists } from "@/lib/local-store";
 import type { ShoppingListOverview, UserProfile } from "@/lib/types";
 import { VISIBILITY_LABELS } from "@/lib/constants";
 
 export function HomeClient() {
+  const router = useRouter();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [lists, setLists] = useState<ShoppingListOverview[]>([]);
   const [demo, setDemo] = useState<Array<{ email: string; password: string; name: string }>>([]);
+  const [newListName, setNewListName] = useState("");
+  const [plannedDate, setPlannedDate] = useState(DEFAULT_LIST_FORM.plannedDate ?? "");
+  const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
   const configured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
   useEffect(() => {
@@ -66,9 +73,44 @@ export function HomeClient() {
   return (
     <div className="page-grid home-shell">
       <section className="panel list-overview-panel">
-        <div className="list-toolbar">
-          <Link href="/lists/new" className="primary-button compact-button compact-button-accent">新しいリスト</Link>
-        </div>
+        <form
+          className="list-create-inline"
+          action={() => {
+            startTransition(async () => {
+              try {
+                if (!user) {
+                  throw new Error("ログインしてください");
+                }
+                const list = await createList(user, {
+                  ...DEFAULT_LIST_FORM,
+                  name: newListName,
+                  plannedDate: plannedDate || null,
+                });
+                router.push(`/lists/${list.id}`);
+              } catch (error) {
+                setMessage(error instanceof Error ? error.message : "作成できませんでした。");
+              }
+            });
+          }}
+        >
+          <input
+            value={newListName}
+            placeholder="新しいリスト"
+            aria-label="新しいリスト"
+            maxLength={50}
+            onChange={(event) => setNewListName(event.target.value)}
+          />
+          <input
+            type="date"
+            value={plannedDate}
+            aria-label="買い物予定日"
+            onChange={(event) => setPlannedDate(event.target.value)}
+          />
+          <button type="submit" className="primary-button compact-button compact-button-accent" disabled={isPending}>
+            {isPending ? "作成中..." : "作成"}
+          </button>
+        </form>
+        {message ? <p className="notice-inline">{message}</p> : null}
         <div className="list-overview-grid">
           {lists.length === 0 ? <p className="empty-state">なし</p> : null}
           {lists.map((list) => (

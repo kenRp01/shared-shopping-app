@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/logo";
 import { getCurrentUser, signOutLocal } from "@/lib/local-store";
@@ -9,8 +8,6 @@ import type { UserProfile } from "@/lib/types";
 
 export function Nav() {
   const [user, setUser] = useState<UserProfile | null>(null);
-  const pathname = usePathname();
-  const showCreateLink = !user || pathname !== "/";
 
   useEffect(() => {
     getCurrentUser().then(setUser);
@@ -20,11 +17,6 @@ export function Nav() {
     <header className="topbar">
       <Logo />
       <nav className="topnav">
-        {showCreateLink ? (
-          <Link href="/lists/new" className="nav-pill nav-add-link" aria-label="add" title="add">
-            add
-          </Link>
-        ) : null}
         {user ? (
           <>
             <span className="nav-pill nav-user-pill" aria-label={user.name} title={user.name}>
@@ -48,8 +40,8 @@ export function Nav() {
             <Link href="/login" className="nav-icon-link" aria-label="ログイン" title="ログイン">
               <LoginIcon />
             </Link>
-            <Link href="/signup" className="nav-cta nav-add-link" aria-label="add" title="add">
-              add
+            <Link href="/signup" className="nav-cta nav-signup-link" aria-label="signup" title="signup">
+              signup
             </Link>
           </>
         )}

@@ -1,5 +1,5 @@
-import { ListCreator } from "@/components/list-creator";
+import { redirect } from "next/navigation";
 
 export default function NewListPage() {
-  return <ListCreator />;
+  redirect("/");
 }
