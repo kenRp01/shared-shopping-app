@@ -893,15 +893,24 @@ code {
   }
 
   .topbar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
     margin-bottom: 10px;
     padding: 10px 12px;
     border-radius: 18px;
     gap: 10px;
   }
 
+  .topbar > a {
+    min-width: 0;
+    flex: 1;
+  }
+
   .topnav {
-    width: calc(100% + 4px);
-    margin-inline: -2px;
+    width: auto;
+    margin-inline: 0;
+    flex: 0 0 auto;
     flex-wrap: nowrap;
     overflow-x: auto;
     padding-bottom: 2px;
@@ -915,6 +924,7 @@ code {
 
   .logo-lockup {
     gap: 10px;
+    min-width: 0;
   }
 
   .logo-mark {
@@ -925,6 +935,9 @@ code {
 
   .logo-lockup h1 {
     font-size: 1.15rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .panel,
@@ -1114,8 +1127,6 @@ code {
   }
 
   .topbar {
-    flex-direction: column;
-    align-items: flex-start;
     position: static;
   }
 
