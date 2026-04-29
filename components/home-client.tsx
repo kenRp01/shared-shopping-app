@@ -6,7 +6,7 @@ import { useEffect, useState, useTransition } from "react";
 import { DEFAULT_LIST_FORM } from "@/lib/constants";
 import { createList, getCurrentUser, getDemoCredentials, listAccessibleLists } from "@/lib/local-store";
 import type { ShoppingListOverview, UserProfile } from "@/lib/types";
-import { VISIBILITY_LABELS } from "@/lib/constants";
+import { formatDate } from "@/lib/utils";
 
 export function HomeClient() {
   const router = useRouter();
@@ -115,16 +115,17 @@ export function HomeClient() {
           {lists.length === 0 ? <p className="empty-state">なし</p> : null}
           {lists.map((list) => (
             <article className="list-card list-card-modern" key={list.id}>
-              <div className="list-card-head">
-                <h3>{list.name}</h3>
-                <span className="tag">{VISIBILITY_LABELS[list.visibility]}</span>
-              </div>
-              <div className="metric-pills">
-                <span className="metric-pill strong">未購入 {list.pendingCount}</span>
-              </div>
-              <div className="card-actions">
-                <Link href={`/lists/${list.id}`} className="primary-button">開く</Link>
-              </div>
+              <Link href={`/lists/${list.id}`} className="list-card-link" aria-label={`${list.name} を開く`}>
+                <div className="list-card-head">
+                  <h3>{list.name}</h3>
+                  <span className="list-card-chevron" aria-hidden="true">›</span>
+                </div>
+                <div className="list-card-subline">
+                  {list.plannedDate ? <span>{formatDate(list.plannedDate)}</span> : null}
+                  {list.pendingCount > 0 ? <span>{list.pendingCount}件</span> : null}
+                  {list.pendingCount === 0 ? <span>空</span> : null}
+                </div>
+              </Link>
             </article>
           ))}
         </div>

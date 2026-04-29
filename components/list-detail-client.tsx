@@ -9,7 +9,6 @@ import {
   getListSnapshot,
   getPublicSnapshot,
   removeItem,
-  toggleItemStatus,
   updateItem,
 } from "@/lib/local-store";
 import { useSpeechInput } from "@/lib/use-speech-input";
@@ -26,7 +25,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const [snapshot, setSnapshot] = useState<ShoppingListSnapshot | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
-  const [showPurchased, setShowPurchased] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
   const [isPending, startTransition] = useTransition();
@@ -54,7 +52,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   }, [listId, publicToken]);
 
   const pendingItems = snapshot?.items.filter((item) => item.status === "pending") ?? [];
-  const purchasedItems = snapshot?.items.filter((item) => item.status === "purchased") ?? [];
 
   if (!snapshot) {
     return (
@@ -116,9 +113,13 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                 </div>
               </div>
 
-              <label className="quick-add-quantity">
-                数量
-                <input value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} />
+              <label className="quick-add-quantity quick-add-quantity-inline">
+                <input
+                  value={form.quantity}
+                  aria-label="数量"
+                  placeholder="1"
+                  onChange={(event) => setForm({ ...form, quantity: event.target.value })}
+                />
               </label>
 
               <button type="submit" className="primary-button quick-add-submit" disabled={isPending}>
@@ -134,33 +135,20 @@ export function ListDetailClient({ listId, publicToken }: Props) {
 
       <section className="panel detail-hero detail-hero-compact">
         <div>
-          <div className="inline-badges inline-badges-tight inline-badges-scroll">
-            <span className="tag">{VISIBILITY_LABELS[snapshot.list.visibility]}</span>
-            <span className="tag soft">{snapshot.members.length} 人</span>
-            {snapshot.list.plannedDate ? <span className="tag soft">{formatDate(snapshot.list.plannedDate)}</span> : null}
-          </div>
           <h2>{snapshot.list.name}</h2>
+          <div className="list-card-subline">
+            <span>{VISIBILITY_LABELS[snapshot.list.visibility]}</span>
+            {snapshot.list.plannedDate ? <span>{formatDate(snapshot.list.plannedDate)}</span> : null}
+          </div>
         </div>
         {publicToken ? null : (
           <div className="card-actions">
             <Link href={`/lists/${snapshot.list.id}/settings`} className="ghost-button">共有設定</Link>
-            {snapshot.list.publicToken ? (
-              <Link href={`/public/${snapshot.list.publicToken}`} className="ghost-button">公開ページ</Link>
-            ) : null}
           </div>
         )}
       </section>
 
       <section className="panel list-section-panel">
-        <div className="list-section-head">
-          <span className="metric-pill strong">未購入 {pendingItems.length}</span>
-          {purchasedItems.length ? (
-            <button type="button" className="ghost-button list-toggle-button" onClick={() => setShowPurchased((current) => !current)}>
-              購入済み
-              <span>{purchasedItems.length}</span>
-            </button>
-          ) : null}
-        </div>
         <div className="item-list item-list-stack">
           {pendingItems.length === 0 ? <p className="empty-state">なし</p> : null}
           {pendingItems.map((item) => (
@@ -170,7 +158,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
               editable={snapshot.permission === "edit" && !publicToken}
               onToggle={async () => {
                 if (!user) return;
-                await toggleItemStatus(snapshot.list.id, item.id, user);
+                await removeItem(snapshot.list.id, item.id, user);
                 await refresh(user);
               }}
               onRemove={async () => {
@@ -208,67 +196,8 @@ export function ListDetailClient({ listId, publicToken }: Props) {
             />
           ))}
         </div>
-        {showPurchased && purchasedItems.length ? (
-          <div className="purchased-drawer">
-            <div className="item-list item-list-stack">
-              {purchasedItems.map((item) => (
-                <ItemRow
-                  item={item}
-                  key={item.id}
-                  editable={snapshot.permission === "edit" && !publicToken}
-                  onToggle={async () => {
-                    if (!user) return;
-                    await toggleItemStatus(snapshot.list.id, item.id, user);
-                    await refresh(user);
-                  }}
-                  onRemove={async () => {
-                    if (!user) return;
-                    await removeItem(snapshot.list.id, item.id, user);
-                    await refresh(user);
-                  }}
-                  onEdit={
-                    snapshot.permission === "edit" && !publicToken
-                      ? async (payload) => {
-                          if (!user) return;
-                          await updateItem(snapshot.list.id, item.id, user, payload);
-                          setEditingItemId(null);
-                          await refresh(user);
-                        }
-                      : undefined
-                  }
-                  editing={editingItemId === item.id}
-                  onStartEdit={() => {
-                    setEditingItemId(item.id);
-                    setEditForm({
-                      title: item.title,
-                      quantity: item.quantity,
-                      note: item.note,
-                      scope: item.scope,
-                      dueDate: item.dueDate,
-                      dueTime: item.dueTime,
-                      remindOn: item.remindOn,
-                      reminderEnabled: item.reminderEnabled,
-                    });
-                  }}
-                  onCancelEdit={() => setEditingItemId(null)}
-                  editForm={editForm}
-                  setEditForm={setEditForm}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
       </section>
     </div>
-  );
-}
-
-function ListIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 7h10M9 12h10M9 17h10" />
-      <path d="M5 7h.01M5 12h.01M5 17h.01" />
-    </svg>
   );
 }
 function MicIcon() {
@@ -316,7 +245,7 @@ function ItemRow({
               type="checkbox"
               checked={item.status === "purchased"}
               onChange={() => void onToggle()}
-              aria-label={item.status === "pending" ? `${item.title} を購入済みにする` : `${item.title} を未購入に戻す`}
+              aria-label={`${item.title} を購入済みにして一覧から外す`}
             />
             <span className="item-check-ui" aria-hidden="true" />
           </label>
