@@ -1,7 +1,7 @@
 "use client";
 
 import { openDB, type DBSchema } from "idb";
-import { DEMO_USERS, DEFAULT_LIST_FORM, DEFAULT_ITEM_FORM } from "@/lib/constants";
+import { DEMO_USERS, DEFAULT_ITEM_FORM } from "@/lib/constants";
 import { buildReminderDigest } from "@/lib/reminders";
 import { createSupabaseBrowserClient, hasSupabaseEnv } from "@/lib/supabase-browser";
 import type {
@@ -91,136 +91,29 @@ async function ensureSeeded(db: Awaited<ReturnType<typeof openDB<ShoppingDb>>>) 
     createdAt: now,
   }));
 
-  const listId = "list_demo_shared";
-  const publicToken = "demo-shared-board";
-  const list: ShoppingList = {
-    id: listId,
-    name: "共有買い物",
-    description: "日用品と食材を一緒に確認する共有リスト",
-    plannedDate: todayKey(),
-    visibility: "public_link",
-    ownerUserId: users[0].id,
-    publicToken,
-    dailyReminderEnabled: true,
-    dailyReminderHour: DEFAULT_LIST_FORM.dailyReminderHour,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  const members: ShoppingListMember[] = [
-    {
-      id: "member_owner",
-      listId,
-      userId: users[0].id,
-      role: "owner",
-      invitedByUserId: users[0].id,
-      createdAt: now,
-    },
-    {
-      id: "member_editor",
-      listId,
-      userId: users[1].id,
-      role: "editor",
-      invitedByUserId: users[0].id,
-      createdAt: now,
-    },
-  ];
-
-  const items: ShoppingItem[] = [
-    {
-      id: "item_milk",
-      listId,
-      title: "牛乳",
-      quantity: "2本",
-      note: "朝食用",
-      status: "pending",
-      scope: "shared",
-      dueDate: todayKey(),
-      dueTime: "18:00",
-      remindOn: todayKey(),
-      reminderEnabled: true,
-      createdByUserId: users[0].id,
-      updatedByUserId: users[0].id,
-      purchasedByUserId: null,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: "item_eggs",
-      listId,
-      title: "卵",
-      quantity: "1パック",
-      note: "",
-      status: "pending",
-      scope: "personal",
-      dueDate: todayKey(new Date(Date.now() - 24 * 60 * 60 * 1000)),
-      dueTime: "12:00",
-      remindOn: todayKey(),
-      reminderEnabled: true,
-      createdByUserId: users[1].id,
-      updatedByUserId: users[1].id,
-      purchasedByUserId: null,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: "item_tissue",
-      listId,
-      title: "ティッシュ",
-      quantity: "5箱",
-      note: "ドラッグストアで安い時に",
-      status: "purchased",
-      scope: "shared",
-      dueDate: todayKey(),
-      dueTime: "10:00",
-      remindOn: todayKey(),
-      reminderEnabled: false,
-      createdByUserId: users[0].id,
-      updatedByUserId: users[1].id,
-      purchasedByUserId: users[1].id,
-      createdAt: now,
-      updatedAt: now,
-    },
-  ];
-
-  const tx = db.transaction(["users", "lists", "members", "items"], "readwrite");
+  const tx = db.transaction(["users"], "readwrite");
   await Promise.all(users.map((user) => tx.objectStore("users").put(user)));
-  await tx.objectStore("lists").put(list);
-  await Promise.all(members.map((member) => tx.objectStore("members").put(member)));
-  await Promise.all(items.map((item) => tx.objectStore("items").put(item)));
   await tx.done;
 }
 
 async function migrateLegacyDemoData(db: Awaited<ReturnType<typeof openDB<ShoppingDb>>>) {
-  const list = await db.get("lists", "list_demo_weekend");
-  if (!list) {
-    return;
-  }
+  for (const listId of ["list_demo_weekend", "list_demo_shared"]) {
+    const list = await db.get("lists", listId);
+    if (!list) {
+      continue;
+    }
 
-  await db.put("lists", {
-    ...list,
-    id: "list_demo_shared",
-    publicToken: "demo-shared-board",
-    name: "共有買い物",
-    description: "日用品と食材を一緒に確認する共有リスト",
-    updatedAt: new Date().toISOString(),
-  });
-  await db.delete("lists", "list_demo_weekend");
+    await db.delete("lists", listId);
 
-  const members = (await db.getAll("members")).filter((entry) => entry.listId === "list_demo_weekend");
-  for (const member of members) {
-    await db.put("members", {
-      ...member,
-      listId: "list_demo_shared",
-    });
-  }
+    const members = (await db.getAll("members")).filter((entry) => entry.listId === listId);
+    for (const member of members) {
+      await db.delete("members", member.id);
+    }
 
-  const items = (await db.getAll("items")).filter((entry) => entry.listId === "list_demo_weekend");
-  for (const item of items) {
-    await db.put("items", {
-      ...item,
-      listId: "list_demo_shared",
-    });
+    const items = (await db.getAll("items")).filter((entry) => entry.listId === listId);
+    for (const item of items) {
+      await db.delete("items", item.id);
+    }
   }
 }
 
