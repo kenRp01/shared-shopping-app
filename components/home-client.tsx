@@ -6,7 +6,6 @@ import { useEffect, useState, useTransition } from "react";
 import { DEFAULT_LIST_FORM } from "@/lib/constants";
 import { createList, getCurrentUser, getDemoCredentials, listAccessibleLists } from "@/lib/local-store";
 import type { ShoppingListOverview, UserProfile } from "@/lib/types";
-import { formatDate } from "@/lib/utils";
 
 export function HomeClient() {
   const router = useRouter();
@@ -14,7 +13,6 @@ export function HomeClient() {
   const [lists, setLists] = useState<ShoppingListOverview[]>([]);
   const [demo, setDemo] = useState<Array<{ email: string; password: string; name: string }>>([]);
   const [newListName, setNewListName] = useState("");
-  const [plannedDate, setPlannedDate] = useState(DEFAULT_LIST_FORM.plannedDate ?? "");
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const configured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
@@ -84,7 +82,7 @@ export function HomeClient() {
                 const list = await createList(user, {
                   ...DEFAULT_LIST_FORM,
                   name: newListName,
-                  plannedDate: plannedDate || null,
+                  plannedDate: null,
                 });
                 router.push(`/lists/${list.id}`);
               } catch (error) {
@@ -99,12 +97,6 @@ export function HomeClient() {
             aria-label="新しいリスト"
             maxLength={50}
             onChange={(event) => setNewListName(event.target.value)}
-          />
-          <input
-            type="date"
-            value={plannedDate}
-            aria-label="買い物予定日"
-            onChange={(event) => setPlannedDate(event.target.value)}
           />
           <button type="submit" className="primary-button compact-button compact-button-accent" disabled={isPending}>
             {isPending ? "作成中..." : "作成"}
@@ -121,7 +113,6 @@ export function HomeClient() {
                   <span className="list-card-chevron" aria-hidden="true">›</span>
                 </div>
                 <div className="list-card-subline">
-                  {list.plannedDate ? <span>{formatDate(list.plannedDate)}</span> : null}
                   {list.pendingCount > 0 ? <span>{list.pendingCount}件</span> : null}
                   {list.pendingCount === 0 ? <span>空</span> : null}
                 </div>

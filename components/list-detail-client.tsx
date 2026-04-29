@@ -47,6 +47,16 @@ export function ListDetailClient({ listId, publicToken }: Props) {
     setSnapshot(nextSnapshot);
   }
 
+  function removeItemFromView(itemId: string) {
+    setSnapshot((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        items: current.items.filter((item) => item.id !== itemId),
+      };
+    });
+  }
+
   useEffect(() => {
     refresh();
   }, [listId, publicToken]);
@@ -138,7 +148,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
           <h2>{snapshot.list.name}</h2>
           <div className="list-card-subline">
             <span>{VISIBILITY_LABELS[snapshot.list.visibility]}</span>
-            {snapshot.list.plannedDate ? <span>{formatDate(snapshot.list.plannedDate)}</span> : null}
           </div>
         </div>
         {publicToken ? null : (
@@ -158,8 +167,14 @@ export function ListDetailClient({ listId, publicToken }: Props) {
               editable={snapshot.permission === "edit" && !publicToken}
               onToggle={async () => {
                 if (!user) return;
-                await removeItem(snapshot.list.id, item.id, user);
-                await refresh(user);
+                removeItemFromView(item.id);
+                try {
+                  await removeItem(snapshot.list.id, item.id, user);
+                  await refresh(user);
+                } catch (error) {
+                  await refresh(user);
+                  setMessage(error instanceof Error ? error.message : "更新できませんでした。");
+                }
               }}
               onRemove={async () => {
                 if (!user) return;

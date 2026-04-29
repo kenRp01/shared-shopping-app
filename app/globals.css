@@ -828,7 +828,7 @@ main {
 
 .list-create-inline {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 160px auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   margin-bottom: 18px;
@@ -1100,13 +1100,9 @@ code {
   }
 
   .list-create-inline {
-    grid-template-columns: minmax(0, 1fr) 118px;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
     margin-bottom: 12px;
-  }
-
-  .list-create-inline .compact-button {
-    grid-column: 1 / -1;
   }
 
   .compact-button {
@@ -1196,7 +1192,7 @@ code {
   }
 
   .list-create-inline {
-    grid-template-columns: minmax(0, 1fr) 104px;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .quick-add-row {
