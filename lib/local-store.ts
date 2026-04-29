@@ -61,17 +61,26 @@ interface ShoppingDb extends DBSchema {
 }
 
 const DB_NAME = "shareshopi-board";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 async function getDb() {
   const db = await openDB<ShoppingDb>(DB_NAME, DB_VERSION, {
-    upgrade(database) {
-      database.createObjectStore("users", { keyPath: "id" });
-      database.createObjectStore("session");
-      database.createObjectStore("lists", { keyPath: "id" });
-      database.createObjectStore("members", { keyPath: "id" });
-      database.createObjectStore("items", { keyPath: "id" });
-      database.createObjectStore("reminder_logs", { keyPath: "id" });
+    upgrade(database, oldVersion, _newVersion, transaction) {
+      if (oldVersion < 1) {
+        database.createObjectStore("users", { keyPath: "id" });
+        database.createObjectStore("session");
+        database.createObjectStore("lists", { keyPath: "id" });
+        database.createObjectStore("members", { keyPath: "id" });
+        database.createObjectStore("items", { keyPath: "id" });
+        database.createObjectStore("reminder_logs", { keyPath: "id" });
+      }
+
+      if (oldVersion < 2) {
+        transaction.objectStore("lists").clear();
+        transaction.objectStore("members").clear();
+        transaction.objectStore("items").clear();
+        transaction.objectStore("reminder_logs").clear();
+      }
     },
   });
   await ensureSeeded(db);
