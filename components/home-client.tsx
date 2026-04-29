@@ -1,14 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { getCurrentUser, getDemoCredentials, listAccessibleLists } from "@/lib/local-store";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
+import { DEFAULT_LIST_FORM } from "@/lib/constants";
+import { continueAsGuest, createList, getCurrentUser, getDemoCredentials, listAccessibleLists } from "@/lib/local-store";
 import type { ShoppingListOverview, UserProfile } from "@/lib/types";
 
 export function HomeClient() {
+  const router = useRouter();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [lists, setLists] = useState<ShoppingListOverview[]>([]);
   const [demo, setDemo] = useState<Array<{ email: string; password: string; name: string }>>([]);
+  const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     getCurrentUser().then(async (currentUser) => {
@@ -30,9 +35,27 @@ export function HomeClient() {
             <h2>共有買い物リスト</h2>
           </div>
           <div className="hero-actions">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => {
+                startTransition(async () => {
+                  try {
+                    const result = await continueAsGuest();
+                    router.push(`/lists/${result.listId}`);
+                  } catch (error) {
+                    setMessage(error instanceof Error ? error.message : "開始できませんでした。");
+                  }
+                });
+              }}
+              disabled={isPending}
+            >
+              {isPending ? "準備中..." : "ひとりで使う"}
+            </button>
             <Link href="/signup" className="primary-button">新規登録</Link>
             <Link href="/login" className="ghost-button">ログイン</Link>
           </div>
+          {message ? <p className="notice-inline">{message}</p> : null}
           <div className="status-ribbon">
             <span>無料運用前提</span>
             <span>共有メンバー編集可</span>
@@ -64,6 +87,36 @@ export function HomeClient() {
   return (
     <div className="page-grid home-shell">
       <section className="panel list-overview-panel">
+        {lists.length === 0 ? (
+          <div className="card-actions">
+            <button
+              type="button"
+              className="primary-button compact-button compact-button-accent"
+              onClick={() => {
+                startTransition(async () => {
+                  try {
+                    if (!user) {
+                      throw new Error("開始できませんでした。");
+                    }
+                    const list = await createList(user, {
+                      ...DEFAULT_LIST_FORM,
+                      name: "買い物",
+                      plannedDate: null,
+                      visibility: "private",
+                    });
+                    router.push(`/lists/${list.id}`);
+                  } catch (error) {
+                    setMessage(error instanceof Error ? error.message : "カテゴリーを作成できませんでした。");
+                  }
+                });
+              }}
+              disabled={isPending}
+            >
+              {isPending ? "作成中..." : "最初のカテゴリー"}
+            </button>
+          </div>
+        ) : null}
+        {message ? <p className="notice-inline">{message}</p> : null}
         <div className="list-overview-grid">
           {lists.length === 0 ? <p className="empty-state">商品を追加してカテゴリーを作ってください</p> : null}
           {lists.map((list) => (

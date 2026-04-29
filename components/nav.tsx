@@ -21,9 +21,6 @@ export function Nav() {
       <nav className="topnav">
         {user ? (
           <>
-            <span className="nav-pill nav-user-pill" aria-label={user.name} title={user.name}>
-              <UserIcon />
-            </span>
             <button
               type="button"
               className="ghost-button nav-icon-link"
@@ -46,15 +43,6 @@ export function Nav() {
         )}
       </nav>
     </header>
-  );
-}
-
-function UserIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
-      <path d="M5 20a7 7 0 0 1 14 0" />
-    </svg>
   );
 }
 

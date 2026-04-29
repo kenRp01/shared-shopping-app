@@ -1,7 +1,7 @@
 "use client";
 
 import { openDB, type DBSchema } from "idb";
-import { DEMO_USERS, DEFAULT_ITEM_FORM } from "@/lib/constants";
+import { DEMO_USERS, DEFAULT_ITEM_FORM, DEFAULT_LIST_FORM } from "@/lib/constants";
 import { buildReminderDigest } from "@/lib/reminders";
 import { createSupabaseBrowserClient, hasSupabaseEnv } from "@/lib/supabase-browser";
 import type {
@@ -62,6 +62,7 @@ interface ShoppingDb extends DBSchema {
 
 const DB_NAME = "shareshopi-board";
 const DB_VERSION = 2;
+const GUEST_USER_ID = "guest_local_user";
 
 async function getDb() {
   const db = await openDB<ShoppingDb>(DB_NAME, DB_VERSION, {
@@ -343,21 +344,17 @@ export async function getCurrentUser() {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user?.email) {
-      const db = await getDb();
-      await db.delete("session", "current");
-      return null;
+    if (user?.email) {
+      const nameFromMeta =
+        typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null;
+
+      return syncSupabaseUserToLocal({
+        id: user.id,
+        email: user.email,
+        name: nameFromMeta,
+        persistSession: true,
+      });
     }
-
-    const nameFromMeta =
-      typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null;
-
-    return syncSupabaseUserToLocal({
-      id: user.id,
-      email: user.email,
-      name: nameFromMeta,
-      persistSession: true,
-    });
   }
 
   const db = await getDb();
@@ -367,6 +364,39 @@ export async function getCurrentUser() {
   }
   const user = await db.get("users", session.userId);
   return user ? toProfile(user) : null;
+}
+
+export async function continueAsGuest() {
+  const db = await getDb();
+  let guest = await db.get("users", GUEST_USER_ID);
+
+  if (!guest) {
+    guest = {
+      id: GUEST_USER_ID,
+      email: "guest@shareshopi.local",
+      name: "ひとり利用",
+      password: "",
+      createdAt: new Date().toISOString(),
+    };
+    await db.put("users", guest);
+  }
+
+  await db.put("session", { userId: guest.id }, "current");
+  const profile = toProfile(guest);
+  const existingLists = await listAccessibleLists(profile.id);
+
+  if (existingLists.length > 0) {
+    return { user: profile, listId: existingLists[0].id };
+  }
+
+  const starter = await createList(profile, {
+    ...DEFAULT_LIST_FORM,
+    name: "買い物",
+    plannedDate: null,
+    visibility: "private",
+  });
+
+  return { user: profile, listId: starter.id };
 }
 
 export async function listAccessibleLists(viewerId: string) {
