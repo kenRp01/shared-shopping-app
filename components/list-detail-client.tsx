@@ -2,16 +2,18 @@
 
 import Link from "next/link";
 import { useEffect, useState, useTransition, type Dispatch, type SetStateAction } from "react";
-import { DEFAULT_ITEM_FORM, ITEM_SCOPE_LABELS, VISIBILITY_LABELS } from "@/lib/constants";
+import { DEFAULT_ITEM_FORM, DEFAULT_LIST_FORM, ITEM_SCOPE_LABELS, VISIBILITY_LABELS } from "@/lib/constants";
 import {
+  createList,
   createItem,
   getCurrentUser,
   getListSnapshot,
   getPublicSnapshot,
+  listAccessibleLists,
   removeItem,
   updateItem,
 } from "@/lib/local-store";
-import type { CreateItemPayload, ShoppingItemView, ShoppingListSnapshot, UserProfile } from "@/lib/types";
+import type { CreateItemPayload, ShoppingItemView, ShoppingListOverview, ShoppingListSnapshot, UserProfile } from "@/lib/types";
 import { cn, formatDate } from "@/lib/utils";
 
 type Props = {
@@ -22,15 +24,23 @@ type Props = {
 export function ListDetailClient({ listId, publicToken }: Props) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [snapshot, setSnapshot] = useState<ShoppingListSnapshot | null>(null);
+  const [categories, setCategories] = useState<ShoppingListOverview[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
+  const [editCategoryId, setEditCategoryId] = useState<string>("");
+  const [newCategoryName, setNewCategoryName] = useState("");
   const [isPending, startTransition] = useTransition();
 
   async function refresh(currentUser?: UserProfile | null) {
     const nextUser = currentUser ?? (await getCurrentUser());
     setUser(nextUser);
+    if (nextUser) {
+      setCategories(await listAccessibleLists(nextUser.id));
+    } else {
+      setCategories([]);
+    }
     const nextSnapshot = publicToken
       ? await getPublicSnapshot(publicToken)
       : listId
@@ -136,6 +146,19 @@ export function ListDetailClient({ listId, publicToken }: Props) {
       ) : null}
 
       <section className="panel list-section-panel">
+        {categories.length ? (
+          <div className="category-strip" aria-label="カテゴリー切り替え">
+            {categories.map((category) => (
+              <Link
+                key={category.id}
+                href={`/lists/${category.id}`}
+                className={cn("category-pill", category.id === snapshot.list.id && "category-pill-active")}
+              >
+                {category.name}
+              </Link>
+            ))}
+          </div>
+        ) : null}
         <div className="detail-inline-head">
           <h2>{snapshot.list.name}</h2>
           {publicToken ? null : (
@@ -163,18 +186,30 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                 }
               }}
               onEdit={
-                snapshot.permission === "edit" && !publicToken
-                  ? async (payload) => {
-                      if (!user) return;
-                      await updateItem(snapshot.list.id, item.id, user, payload);
-                      setEditingItemId(null);
-                      await refresh(user);
-                    }
-                  : undefined
+                    snapshot.permission === "edit" && !publicToken
+                      ? async (payload) => {
+                          if (!user) return;
+                          let targetCategoryId = editCategoryId || snapshot.list.id;
+                          if (newCategoryName.trim()) {
+                            const nextList = await createList(user, {
+                              ...DEFAULT_LIST_FORM,
+                              name: newCategoryName.trim(),
+                              plannedDate: null,
+                            });
+                            targetCategoryId = nextList.id;
+                          }
+                          await updateItem(snapshot.list.id, item.id, user, payload, targetCategoryId);
+                          setEditingItemId(null);
+                          setNewCategoryName("");
+                          await refresh(user);
+                        }
+                      : undefined
               }
               editing={editingItemId === item.id}
               onStartEdit={() => {
                 setEditingItemId(item.id);
+                setEditCategoryId(snapshot.list.id);
+                setNewCategoryName("");
                 setEditForm({
                   title: item.title,
                   quantity: item.quantity,
@@ -189,6 +224,11 @@ export function ListDetailClient({ listId, publicToken }: Props) {
               onCancelEdit={() => setEditingItemId(null)}
               editForm={editForm}
               setEditForm={setEditForm}
+              categories={categories}
+              editCategoryId={editCategoryId}
+              setEditCategoryId={setEditCategoryId}
+              newCategoryName={newCategoryName}
+              setNewCategoryName={setNewCategoryName}
             />
           ))}
         </div>
@@ -207,6 +247,11 @@ function ItemRow({
   onCancelEdit,
   editForm,
   setEditForm,
+  categories,
+  editCategoryId,
+  setEditCategoryId,
+  newCategoryName,
+  setNewCategoryName,
 }: {
   item: ShoppingItemView;
   editable: boolean;
@@ -217,6 +262,11 @@ function ItemRow({
   onCancelEdit: () => void;
   editForm: CreateItemPayload;
   setEditForm: Dispatch<SetStateAction<CreateItemPayload>>;
+  categories: ShoppingListOverview[];
+  editCategoryId: string;
+  setEditCategoryId: Dispatch<SetStateAction<string>>;
+  newCategoryName: string;
+  setNewCategoryName: Dispatch<SetStateAction<string>>;
 }) {
   const [isSaving, startSaving] = useTransition();
   const [editMessage, setEditMessage] = useState<string | null>(null);
@@ -280,6 +330,18 @@ function ItemRow({
             <label>
               数量
               <input value={editForm.quantity} onChange={(event) => setEditForm((current) => ({ ...current, quantity: event.target.value }))} />
+            </label>
+            <label>
+              カテゴリー
+              <select value={editCategoryId} onChange={(event) => setEditCategoryId(event.target.value)}>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>{category.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              新しいカテゴリー
+              <input value={newCategoryName} placeholder="必要なときだけ入力" onChange={(event) => setNewCategoryName(event.target.value)} />
             </label>
             <label>
               登録タイプ

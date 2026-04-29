@@ -1,21 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
-import { DEFAULT_LIST_FORM } from "@/lib/constants";
-import { createList, getCurrentUser, getDemoCredentials, listAccessibleLists } from "@/lib/local-store";
+import { useEffect, useState } from "react";
+import { getCurrentUser, getDemoCredentials, listAccessibleLists } from "@/lib/local-store";
 import type { ShoppingListOverview, UserProfile } from "@/lib/types";
 
 export function HomeClient() {
-  const router = useRouter();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [lists, setLists] = useState<ShoppingListOverview[]>([]);
   const [demo, setDemo] = useState<Array<{ email: string; password: string; name: string }>>([]);
-  const [newListName, setNewListName] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const configured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
   useEffect(() => {
     getCurrentUser().then(async (currentUser) => {
@@ -71,40 +64,8 @@ export function HomeClient() {
   return (
     <div className="page-grid home-shell">
       <section className="panel list-overview-panel">
-        <form
-          className="list-create-inline"
-          action={() => {
-            startTransition(async () => {
-              try {
-                if (!user) {
-                  throw new Error("ログインしてください");
-                }
-                const list = await createList(user, {
-                  ...DEFAULT_LIST_FORM,
-                  name: newListName,
-                  plannedDate: null,
-                });
-                router.push(`/lists/${list.id}`);
-              } catch (error) {
-                setMessage(error instanceof Error ? error.message : "作成できませんでした。");
-              }
-            });
-          }}
-        >
-          <input
-            value={newListName}
-            placeholder="新しいリスト"
-            aria-label="新しいリスト"
-            maxLength={50}
-            onChange={(event) => setNewListName(event.target.value)}
-          />
-          <button type="submit" className="primary-button compact-button compact-button-accent" disabled={isPending}>
-            {isPending ? "作成中..." : "作成"}
-          </button>
-        </form>
-        {message ? <p className="notice-inline">{message}</p> : null}
         <div className="list-overview-grid">
-          {lists.length === 0 ? <p className="empty-state">なし</p> : null}
+          {lists.length === 0 ? <p className="empty-state">商品を追加してカテゴリーを作ってください</p> : null}
           {lists.map((list) => (
             <article className="list-card list-card-modern" key={list.id}>
               <Link href={`/lists/${list.id}`} className="list-card-link" aria-label={`${list.name} を開く`}>

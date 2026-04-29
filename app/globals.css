@@ -856,6 +856,38 @@ main {
   margin-bottom: 18px;
 }
 
+.category-strip {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.category-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.category-pill {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+}
+
+.category-pill-active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: white;
+}
+
 .detail-inline-head {
   display: flex;
   align-items: center;

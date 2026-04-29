@@ -566,7 +566,13 @@ export async function createItem(listId: string, viewer: UserProfile, payload: C
   return item;
 }
 
-export async function updateItem(listId: string, itemId: string, viewer: UserProfile, payload: UpdateItemPayload) {
+export async function updateItem(
+  listId: string,
+  itemId: string,
+  viewer: UserProfile,
+  payload: UpdateItemPayload,
+  nextListId?: string,
+) {
   const result = createItemSchema.safeParse(payload);
   if (!result.success) {
     throw new Error("商品情報を確認してください。");
@@ -583,9 +589,18 @@ export async function updateItem(listId: string, itemId: string, viewer: UserPro
     throw new Error("商品が見つかりません。");
   }
 
+  const destinationListId = nextListId ?? listId;
+  if (destinationListId !== listId) {
+    const destinationSnapshot = await getListSnapshot(destinationListId, viewer.id);
+    if (!destinationSnapshot || destinationSnapshot.permission !== "edit") {
+      throw new Error("移動先カテゴリーを編集する権限がありません。");
+    }
+  }
+
   const now = new Date().toISOString();
   await db.put("items", {
     ...item,
+    listId: destinationListId,
     title: result.data.title,
     quantity: result.data.quantity,
     note: result.data.note,
@@ -601,6 +616,13 @@ export async function updateItem(listId: string, itemId: string, viewer: UserPro
   const list = await db.get("lists", listId);
   if (list) {
     await db.put("lists", { ...list, updatedAt: now });
+  }
+
+  if (destinationListId !== listId) {
+    const destinationList = await db.get("lists", destinationListId);
+    if (destinationList) {
+      await db.put("lists", { ...destinationList, updatedAt: now });
+    }
   }
 }
 
