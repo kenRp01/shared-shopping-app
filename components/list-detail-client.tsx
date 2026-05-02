@@ -11,6 +11,7 @@ import {
   getPublicSnapshot,
   listAccessibleLists,
   removeItem,
+  reorderItems,
   reorderLists,
   updateItem,
 } from "@/lib/local-store";
@@ -35,6 +36,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const [showCategoryCreate, setShowCategoryCreate] = useState(false);
   const [categoryFormName, setCategoryFormName] = useState("");
   const [draggingCategoryId, setDraggingCategoryId] = useState<string | null>(null);
+  const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   async function refresh(currentUser?: UserProfile | null) {
@@ -279,6 +281,52 @@ export function ListDetailClient({ listId, publicToken }: Props) {
               key={item.id}
               editable={snapshot.permission === "edit" && !publicToken}
               showSharedContext={hasSharedContext}
+              dragging={draggingItemId === item.id}
+              onDragStart={() => setDraggingItemId(item.id)}
+              onDragEnd={() => setDraggingItemId(null)}
+              onDragEnter={() => {
+                if (!draggingItemId || draggingItemId === item.id || !user) {
+                  return;
+                }
+                setSnapshot((current) => {
+                  if (!current) {
+                    return current;
+                  }
+                  const visiblePendingIds = new Set(pendingItems.map((entry) => entry.id));
+                  const pending = current.items.filter((entry) => visiblePendingIds.has(entry.id));
+                  const others = current.items.filter((entry) => !visiblePendingIds.has(entry.id));
+                  const nextPending = [...pending];
+                  const from = nextPending.findIndex((entry) => entry.id === draggingItemId);
+                  const to = nextPending.findIndex((entry) => entry.id === item.id);
+                  if (from < 0 || to < 0 || from === to) {
+                    return current;
+                  }
+                  const [moved] = nextPending.splice(from, 1);
+                  nextPending.splice(to, 0, moved);
+                  return {
+                    ...current,
+                    items: [...nextPending, ...others],
+                  };
+                });
+              }}
+              onDrop={() => {
+                if (!user) {
+                  return;
+                }
+                const orderedIds = pendingItems.map((entry) => entry.id);
+                startTransition(async () => {
+                  try {
+                    await reorderItems(snapshot.list.id, user, orderedIds);
+                    await refresh(user);
+                    setMessage(null);
+                  } catch (error) {
+                    setMessage(error instanceof Error ? error.message : "並び替えできませんでした。");
+                    await refresh(user);
+                  } finally {
+                    setDraggingItemId(null);
+                  }
+                });
+              }}
               onToggle={async () => {
                 if (!user) return;
                 removeItemFromView(item.id);
@@ -346,6 +394,11 @@ function ItemRow({
   item,
   editable,
   showSharedContext,
+  dragging,
+  onDragStart,
+  onDragEnd,
+  onDragEnter,
+  onDrop,
   onToggle,
   onEdit,
   editing,
@@ -362,6 +415,11 @@ function ItemRow({
   item: ShoppingItemView;
   editable: boolean;
   showSharedContext: boolean;
+  dragging: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDragEnter: () => void;
+  onDrop: () => void;
   onToggle: () => Promise<void>;
   onEdit?: (payload: CreateItemPayload) => Promise<void>;
   editing: boolean;
@@ -383,10 +441,20 @@ function ItemRow({
       className={cn(
         "item-row item-row-modern",
         showSharedContext && (item.scope === "shared" ? "item-row-shared" : "item-row-personal"),
+        dragging && "item-row-dragging",
         item.status === "purchased" && "item-row-done",
         item.dueState === "today" && "item-row-today",
         item.dueState === "overdue" && "item-row-overdue",
       )}
+      draggable={editable && !editing}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={(event) => event.preventDefault()}
+      onDragEnter={onDragEnter}
+      onDrop={(event) => {
+        event.preventDefault();
+        onDrop();
+      }}
     >
       <div className="item-row-top">
         {editable ? (

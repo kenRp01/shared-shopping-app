@@ -86,6 +86,36 @@ async function ensureListOrdering(db: Awaited<ReturnType<typeof openDB<ShoppingD
   await tx.done;
 }
 
+async function ensureItemOrdering(db: Awaited<ReturnType<typeof openDB<ShoppingDb>>>) {
+  const items = await db.getAll("items");
+  const needsBackfill = items.some((item) => typeof (item as ShoppingItem & { sortOrder?: number }).sortOrder !== "number");
+  if (!needsBackfill) {
+    return;
+  }
+
+  const grouped = new Map<string, ShoppingItem[]>();
+  for (const item of items) {
+    grouped.set(item.listId, [...(grouped.get(item.listId) ?? []), item]);
+  }
+
+  const tx = db.transaction("items", "readwrite");
+  const writes = [...grouped.values()].flatMap((listItems) =>
+    [...listItems]
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+      .map((item, index) =>
+        tx.objectStore("items").put({
+          ...item,
+          sortOrder: typeof (item as ShoppingItem & { sortOrder?: number }).sortOrder === "number"
+            ? item.sortOrder
+            : index,
+        }),
+      ),
+  );
+
+  await Promise.all(writes);
+  await tx.done;
+}
+
 async function getDb() {
   const db = await openDB<ShoppingDb>(DB_NAME, DB_VERSION, {
     upgrade(database, oldVersion, _newVersion, transaction) {
@@ -109,6 +139,7 @@ async function getDb() {
   await ensureSeeded(db);
   await migrateLegacyDemoData(db);
   await ensureListOrdering(db);
+  await ensureItemOrdering(db);
   return db;
 }
 
@@ -581,7 +612,7 @@ export async function getListSnapshot(listId: string, viewerId?: string | null):
         reminderState: formatRelativeDue(item.remindOn ?? item.dueDate, todayKey()),
       };
     })
-    .sort((left, right) => left.status.localeCompare(right.status) || left.createdAt.localeCompare(right.createdAt));
+    .sort((left, right) => left.status.localeCompare(right.status) || left.sortOrder - right.sortOrder || left.createdAt.localeCompare(right.createdAt));
 
   return {
     list,
@@ -625,9 +656,11 @@ export async function createItem(listId: string, viewer: UserProfile, payload: C
 
   const db = await getDb();
   const now = new Date().toISOString();
+  const listItems = (await db.getAll("items")).filter((item) => item.listId === listId);
   const item: ShoppingItem = {
     id: makeId("item"),
     listId,
+    sortOrder: listItems.length ? Math.max(...listItems.map((entry) => entry.sortOrder)) + 1 : 0,
     title: result.data.title,
     quantity: result.data.quantity,
     note: result.data.note,
@@ -649,6 +682,46 @@ export async function createItem(listId: string, viewer: UserProfile, payload: C
     await db.put("lists", { ...list, updatedAt: now });
   }
   return item;
+}
+
+export async function reorderItems(listId: string, viewer: UserProfile, orderedItemIds: string[]) {
+  const snapshot = await getListSnapshot(listId, viewer.id);
+  if (!snapshot || snapshot.permission !== "edit") {
+    throw new Error("このリストを編集する権限がありません。");
+  }
+
+  const visibleItemIds = new Set(snapshot.items.map((item) => item.id));
+  if (!orderedItemIds.every((id) => visibleItemIds.has(id))) {
+    throw new Error("並び替えできない商品が含まれています。");
+  }
+
+  const db = await getDb();
+  const allItems = await db.getAll("items");
+  const itemMap = new Map(allItems.map((item) => [item.id, item]));
+  const now = new Date().toISOString();
+  const tx = db.transaction(["items", "lists"], "readwrite");
+
+  await Promise.all(
+    orderedItemIds.map((itemId, index) => {
+      const item = itemMap.get(itemId);
+      if (!item || item.listId !== listId) {
+        return Promise.resolve();
+      }
+      return tx.objectStore("items").put({
+        ...item,
+        sortOrder: index,
+        updatedByUserId: viewer.id,
+        updatedAt: now,
+      });
+    }),
+  );
+
+  const list = await tx.objectStore("lists").get(listId);
+  if (list) {
+    await tx.objectStore("lists").put({ ...list, updatedAt: now });
+  }
+
+  await tx.done;
 }
 
 export async function updateItem(
@@ -738,6 +811,38 @@ export async function removeItem(listId: string, itemId: string, viewer: UserPro
   }
   const db = await getDb();
   await db.delete("items", itemId);
+}
+
+export async function removeList(listId: string, viewer: UserProfile) {
+  const snapshot = await getListSnapshot(listId, viewer.id);
+  if (!snapshot || snapshot.owner.id !== viewer.id) {
+    throw new Error("リストを削除できるのは所有者だけです。");
+  }
+
+  const db = await getDb();
+  const [members, items, reminderLogs] = await Promise.all([
+    db.getAll("members"),
+    db.getAll("items"),
+    db.getAll("reminder_logs"),
+  ]);
+  const tx = db.transaction(["lists", "members", "items", "reminder_logs"], "readwrite");
+  await tx.objectStore("lists").delete(listId);
+  await Promise.all(
+    members
+      .filter((member) => member.listId === listId)
+      .map((member) => tx.objectStore("members").delete(member.id)),
+  );
+  await Promise.all(
+    items
+      .filter((item) => item.listId === listId)
+      .map((item) => tx.objectStore("items").delete(item.id)),
+  );
+  await Promise.all(
+    reminderLogs
+      .filter((log) => log.listId === listId)
+      .map((log) => tx.objectStore("reminder_logs").delete(log.id)),
+  );
+  await tx.done;
 }
 
 export async function addListMember(listId: string, email: string, viewer: UserProfile) {

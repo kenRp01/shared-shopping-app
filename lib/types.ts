@@ -43,6 +43,7 @@ export type ShoppingListMember = {
 export type ShoppingItem = {
   id: string;
   listId: string;
+  sortOrder: number;
   title: string;
   quantity: string;
   note: string;

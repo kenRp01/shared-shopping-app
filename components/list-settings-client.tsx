@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { getCurrentUser, getListSnapshot, updateListSettings, addListMember } from "@/lib/local-store";
+import { getCurrentUser, getListSnapshot, updateListSettings, addListMember, listAccessibleLists, removeList } from "@/lib/local-store";
 import type { ShoppingListSnapshot, UserProfile } from "@/lib/types";
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
 };
 
 export function ListSettingsClient({ listId }: Props) {
+  const router = useRouter();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [snapshot, setSnapshot] = useState<ShoppingListSnapshot | null>(null);
   const [shareEmail, setShareEmail] = useState("");
@@ -35,6 +37,8 @@ export function ListSettingsClient({ listId }: Props) {
       </section>
     );
   }
+
+  const canDeleteList = Boolean(user && snapshot.owner.id === user.id);
 
   return (
     <div className="page-grid">
@@ -141,6 +145,40 @@ export function ListSettingsClient({ listId }: Props) {
           ))}
         </div>
       </form>
+
+      {canDeleteList ? (
+        <section className="panel form-panel danger-panel">
+          <div className="compact-heading">
+            <p className="eyebrow">Danger</p>
+            <h2>リスト削除</h2>
+          </div>
+          <button
+            type="button"
+            className="ghost-button danger"
+            disabled={isPending}
+            onClick={() => {
+              if (!user) {
+                return;
+              }
+              const confirmed = window.confirm(`「${snapshot.list.name}」を削除します。商品もすべて消えます。`);
+              if (!confirmed) {
+                return;
+              }
+              startTransition(async () => {
+                try {
+                  await removeList(listId, user);
+                  const remainingLists = await listAccessibleLists(user.id);
+                  router.replace(remainingLists[0] ? `/lists/${remainingLists[0].id}` : "/");
+                } catch (error) {
+                  setMessage(error instanceof Error ? error.message : "リスト削除に失敗しました。");
+                }
+              });
+            }}
+          >
+            {isPending ? "削除中..." : "リストを削除"}
+          </button>
+        </section>
+      ) : null}
     </div>
   );
 }
