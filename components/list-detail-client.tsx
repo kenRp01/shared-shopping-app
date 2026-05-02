@@ -85,6 +85,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   }
 
   const activeListName = snapshot.list.name;
+  const hasSharedContext = snapshot.list.visibility !== "private" || snapshot.members.some((member) => member.id !== snapshot.owner.id);
 
   return (
     <div className="page-grid detail-shell">
@@ -277,6 +278,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
               item={item}
               key={item.id}
               editable={snapshot.permission === "edit" && !publicToken}
+              showSharedContext={hasSharedContext}
               onToggle={async () => {
                 if (!user) return;
                 removeItemFromView(item.id);
@@ -343,6 +345,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
 function ItemRow({
   item,
   editable,
+  showSharedContext,
   onToggle,
   onEdit,
   editing,
@@ -358,6 +361,7 @@ function ItemRow({
 }: {
   item: ShoppingItemView;
   editable: boolean;
+  showSharedContext: boolean;
   onToggle: () => Promise<void>;
   onEdit?: (payload: CreateItemPayload) => Promise<void>;
   editing: boolean;
@@ -378,7 +382,7 @@ function ItemRow({
     <article
       className={cn(
         "item-row item-row-modern",
-        item.scope === "shared" ? "item-row-shared" : "item-row-personal",
+        showSharedContext && (item.scope === "shared" ? "item-row-shared" : "item-row-personal"),
         item.status === "purchased" && "item-row-done",
         item.dueState === "today" && "item-row-today",
         item.dueState === "overdue" && "item-row-overdue",
@@ -414,10 +418,12 @@ function ItemRow({
             <span className="item-quantity">{item.quantity}</span>
           </div>
           {item.note ? <p>{item.note}</p> : null}
-          <div className="item-meta-line">
-            <span className="item-meta-text">{item.createdByName}</span>
-            {item.dueDate ? <span className="item-meta-text">{formatDate(item.dueDate)}</span> : null}
-          </div>
+          {showSharedContext || item.dueDate ? (
+            <div className="item-meta-line">
+              {showSharedContext ? <span className="item-meta-text">{item.createdByName}</span> : null}
+              {item.dueDate ? <span className="item-meta-text">{formatDate(item.dueDate)}</span> : null}
+            </div>
+          ) : null}
         </button>
       </div>
       {editing && onEdit ? (
