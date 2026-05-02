@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useTransition, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState, useTransition, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { DEFAULT_ITEM_FORM, DEFAULT_LIST_FORM } from "@/lib/constants";
 import {
   createList,
@@ -11,6 +11,7 @@ import {
   getPublicSnapshot,
   listAccessibleLists,
   removeItem,
+  reorderLists,
   updateItem,
 } from "@/lib/local-store";
 import type { CreateItemPayload, ShoppingItemView, ShoppingListOverview, ShoppingListSnapshot, UserProfile } from "@/lib/types";
@@ -31,6 +32,9 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const [editForm, setEditForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
   const [editCategoryId, setEditCategoryId] = useState<string>("");
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [showCategoryCreate, setShowCategoryCreate] = useState(false);
+  const [categoryFormName, setCategoryFormName] = useState("");
+  const [draggingCategoryId, setDraggingCategoryId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   async function refresh(currentUser?: UserProfile | null) {
@@ -79,6 +83,8 @@ export function ListDetailClient({ listId, publicToken }: Props) {
       </section>
     );
   }
+
+  const activeListName = snapshot.list.name;
 
   return (
     <div className="page-grid detail-shell">
@@ -147,23 +153,120 @@ export function ListDetailClient({ listId, publicToken }: Props) {
 
       <section className="panel list-section-panel">
         {categories.length ? (
-          <div className="category-strip" aria-label="カテゴリー切り替え">
+          <div className="category-strip-wrap">
+            <div className="category-strip" aria-label="カテゴリー切り替え">
             {categories.map((category) => (
-              <Link
+              <div
                 key={category.id}
-                href={`/lists/${category.id}`}
-                className={cn("category-pill", category.id === snapshot.list.id && "category-pill-active")}
+                className={cn(
+                  "category-pill-holder",
+                  draggingCategoryId === category.id && "category-pill-holder-dragging",
+                )}
+                draggable={Boolean(user) && !publicToken}
+                onDragStart={() => setDraggingCategoryId(category.id)}
+                onDragEnd={() => setDraggingCategoryId(null)}
+                onDragOver={(event) => event.preventDefault()}
+                onDragEnter={() => {
+                  if (!draggingCategoryId || draggingCategoryId === category.id || !user) {
+                    return;
+                  }
+                  setCategories((current) => {
+                    const next = [...current];
+                    const from = next.findIndex((entry) => entry.id === draggingCategoryId);
+                    const to = next.findIndex((entry) => entry.id === category.id);
+                    if (from < 0 || to < 0 || from === to) {
+                      return current;
+                    }
+                    const [moved] = next.splice(from, 1);
+                    next.splice(to, 0, moved);
+                    return next;
+                  });
+                }}
+                onDrop={(event: DragEvent<HTMLDivElement>) => {
+                  event.preventDefault();
+                  if (!user) {
+                    return;
+                  }
+                  const orderedIds = categories.map((entry) => entry.id);
+                  startTransition(async () => {
+                    try {
+                      await reorderLists(user, orderedIds);
+                      await refresh(user);
+                    } catch (error) {
+                      setMessage(error instanceof Error ? error.message : "並び替えできませんでした。");
+                      await refresh(user);
+                    } finally {
+                      setDraggingCategoryId(null);
+                    }
+                  });
+                }}
               >
-                {category.name}
-              </Link>
+                <Link
+                  href={`/lists/${category.id}`}
+                  className={cn("category-pill", category.id === snapshot.list.id && "category-pill-active")}
+                >
+                  {category.name}
+                </Link>
+              </div>
             ))}
+            {snapshot.permission === "edit" && !publicToken ? (
+              <button
+                type="button"
+                className="category-add-button"
+                onClick={() => setShowCategoryCreate((current) => !current)}
+                aria-label="新しいリストを作成"
+              >
+                <PlusIcon />
+              </button>
+            ) : null}
+            </div>
+            {showCategoryCreate && snapshot.permission === "edit" && !publicToken ? (
+              <form
+                className="category-create-inline"
+                action={() => {
+                  startTransition(async () => {
+                    try {
+                      if (!user) {
+                        throw new Error("ログインが必要です。");
+                      }
+                      const created = await createList(user, {
+                        ...DEFAULT_LIST_FORM,
+                        name: categoryFormName.trim() || "マイリスト",
+                        plannedDate: null,
+                        visibility: "private",
+                      });
+                      setCategoryFormName("");
+                      setShowCategoryCreate(false);
+                      await refresh(user);
+                      setMessage(null);
+                      window.location.href = `/lists/${created.id}`;
+                    } catch (error) {
+                      setMessage(error instanceof Error ? error.message : "リストを作成できませんでした。");
+                    }
+                  });
+                }}
+              >
+                <input
+                  value={categoryFormName}
+                  placeholder="新しいリスト"
+                  onChange={(event) => setCategoryFormName(event.target.value)}
+                />
+                <button type="submit" className="primary-button compact-button" disabled={isPending}>
+                  作成
+                </button>
+              </form>
+            ) : null}
           </div>
         ) : null}
-        <div className="detail-inline-head">
-          <h2>{snapshot.list.name}</h2>
+        <div className="detail-inline-head detail-inline-head-compact">
           {publicToken ? null : (
-            <Link href={`/lists/${snapshot.list.id}/settings`} className="ghost-button compact-button">
-              設定
+            <Link
+              href={`/lists/${snapshot.list.id}/settings`}
+              className="settings-chip"
+              aria-label={`${activeListName} の設定`}
+            >
+              <GearIcon />
+              <span>設定</span>
             </Link>
           )}
         </div>
@@ -411,5 +514,23 @@ function ItemRow({
         </form>
       ) : null}
     </article>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3.75a2.25 2.25 0 0 1 2.2 1.77l.14.62a1.05 1.05 0 0 0 .89.8l.64.09a2.25 2.25 0 0 1 1.53 3.56l-.38.53a1.05 1.05 0 0 0 0 1.22l.38.53a2.25 2.25 0 0 1-1.53 3.56l-.64.09a1.05 1.05 0 0 0-.89.8l-.14.62a2.25 2.25 0 0 1-4.4 0l-.14-.62a1.05 1.05 0 0 0-.89-.8l-.64-.09a2.25 2.25 0 0 1-1.53-3.56l.38-.53a1.05 1.05 0 0 0 0-1.22l-.38-.53A2.25 2.25 0 0 1 8.75 7l.64-.09a1.05 1.05 0 0 0 .89-.8l.14-.62A2.25 2.25 0 0 1 12 3.75Z" />
+      <circle cx="12" cy="12" r="3.15" />
+    </svg>
   );
 }

@@ -64,6 +64,28 @@ const DB_NAME = "shareshopi-board";
 const DB_VERSION = 2;
 const GUEST_USER_ID = "guest_local_user";
 
+async function ensureListOrdering(db: Awaited<ReturnType<typeof openDB<ShoppingDb>>>) {
+  const lists = await db.getAll("lists");
+  const needsBackfill = lists.some((list) => typeof (list as ShoppingList & { sortOrder?: number }).sortOrder !== "number");
+  if (!needsBackfill) {
+    return;
+  }
+
+  const ordered = [...lists].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  const tx = db.transaction("lists", "readwrite");
+  await Promise.all(
+    ordered.map((list, index) =>
+      tx.objectStore("lists").put({
+        ...list,
+        sortOrder: typeof (list as ShoppingList & { sortOrder?: number }).sortOrder === "number"
+          ? list.sortOrder
+          : index,
+      }),
+    ),
+  );
+  await tx.done;
+}
+
 async function getDb() {
   const db = await openDB<ShoppingDb>(DB_NAME, DB_VERSION, {
     upgrade(database, oldVersion, _newVersion, transaction) {
@@ -86,6 +108,7 @@ async function getDb() {
   });
   await ensureSeeded(db);
   await migrateLegacyDemoData(db);
+  await ensureListOrdering(db);
   return db;
 }
 
@@ -441,7 +464,7 @@ export async function listAccessibleLists(viewerId: string) {
             : listMembers.find((member) => member.userId === viewerId)?.role ?? null,
       };
     })
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    .sort((left, right) => left.sortOrder - right.sortOrder || right.updatedAt.localeCompare(left.updatedAt));
 }
 
 export async function createList(viewer: UserProfile, payload: CreateListPayload) {
@@ -452,9 +475,11 @@ export async function createList(viewer: UserProfile, payload: CreateListPayload
 
   const db = await getDb();
   const now = new Date().toISOString();
+  const lists = await db.getAll("lists");
   const list: ShoppingList = {
     id: makeId("list"),
     name: result.data.name,
+    sortOrder: lists.length ? Math.max(...lists.map((entry) => entry.sortOrder)) + 1 : 0,
     description: result.data.description,
     plannedDate: result.data.plannedDate,
     visibility: result.data.visibility,
@@ -479,6 +504,36 @@ export async function createList(viewer: UserProfile, payload: CreateListPayload
   await tx.objectStore("members").put(member);
   await tx.done;
   return list;
+}
+
+export async function reorderLists(viewer: UserProfile, orderedListIds: string[]) {
+  const accessible = await listAccessibleLists(viewer.id);
+  const accessibleIds = new Set(accessible.map((list) => list.id));
+  if (!orderedListIds.every((id) => accessibleIds.has(id))) {
+    throw new Error("並び替えできないリストが含まれています。");
+  }
+
+  const db = await getDb();
+  const allLists = await db.getAll("lists");
+  const listMap = new Map(allLists.map((list) => [list.id, list]));
+  const now = new Date().toISOString();
+  const tx = db.transaction("lists", "readwrite");
+
+  await Promise.all(
+    orderedListIds.map((listId, index) => {
+      const list = listMap.get(listId);
+      if (!list) {
+        return Promise.resolve();
+      }
+      return tx.objectStore("lists").put({
+        ...list,
+        sortOrder: index,
+        updatedAt: now,
+      });
+    }),
+  );
+
+  await tx.done;
 }
 
 export async function getListSnapshot(listId: string, viewerId?: string | null): Promise<ShoppingListSnapshot | null> {

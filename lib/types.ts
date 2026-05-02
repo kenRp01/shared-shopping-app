@@ -19,6 +19,7 @@ export type LocalUserAccount = UserProfile & {
 export type ShoppingList = {
   id: string;
   name: string;
+  sortOrder: number;
   description: string;
   plannedDate: string | null;
   visibility: ListVisibility;
