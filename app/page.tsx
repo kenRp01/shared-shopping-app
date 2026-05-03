@@ -63,7 +63,15 @@ export default function HomePage() {
   }, [router]);
 
   if (!error) {
-    return <div className="page-grid redirect-shell" />;
+    return (
+      <div className="page-grid redirect-shell">
+        <section className="panel landing-hero landing-hero-compact">
+          <p className="eyebrow">ShareShopi</p>
+          <h2>マイリストを開いています</h2>
+          <p className="muted-text">少しだけお待ちください</p>
+        </section>
+      </div>
+    );
   }
 
   return (

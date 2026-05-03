@@ -4,14 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { DEFAULT_LIST_FORM } from "@/lib/constants";
-import { continueAsGuest, createList, getCurrentUser, getDemoCredentials, listAccessibleLists } from "@/lib/local-store";
+import { continueAsGuest, createList, getCurrentUser, listAccessibleLists } from "@/lib/local-store";
 import type { ShoppingListOverview, UserProfile } from "@/lib/types";
 
 export function HomeClient() {
   const router = useRouter();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [lists, setLists] = useState<ShoppingListOverview[]>([]);
-  const [demo, setDemo] = useState<Array<{ email: string; password: string; name: string }>>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -20,8 +19,6 @@ export function HomeClient() {
       setUser(currentUser);
       if (currentUser) {
         setLists(await listAccessibleLists(currentUser.id));
-      } else {
-        setDemo(await getDemoCredentials());
       }
     });
   }, []);
@@ -52,32 +49,13 @@ export function HomeClient() {
             >
               {isPending ? "準備中..." : "ひとりで使う"}
             </button>
-            <Link href="/signup" className="primary-button">新規登録</Link>
-            <Link href="/login" className="ghost-button">ログイン</Link>
+            <Link href="/login" className="primary-button">Googleでログイン</Link>
           </div>
           {message ? <p className="notice-inline">{message}</p> : null}
           <div className="status-ribbon">
             <span>無料運用前提</span>
-            <span>共有メンバー編集可</span>
+            <span>共有はGoogleログイン</span>
             <span>公開リンクは閲覧のみ</span>
-          </div>
-        </section>
-
-        <section className="panel demo-panel">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">Demo Accounts</p>
-              <h2>デモ</h2>
-            </div>
-          </div>
-          <div className="demo-list">
-            {demo.map((entry) => (
-              <div className="demo-row" key={entry.email}>
-                <strong>{entry.name}</strong>
-                <span>{entry.email}</span>
-                <code>{entry.password}</code>
-              </div>
-            ))}
           </div>
         </section>
       </div>

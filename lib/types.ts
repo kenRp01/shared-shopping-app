@@ -12,9 +12,7 @@ export type UserProfile = {
   createdAt: string;
 };
 
-export type LocalUserAccount = UserProfile & {
-  password: string;
-};
+export type LocalUserAccount = UserProfile;
 
 export type ShoppingList = {
   id: string;

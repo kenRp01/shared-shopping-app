@@ -52,8 +52,3 @@ export const VISIBILITY_LABELS: Record<ListVisibility, string> = {
   shared: "共有中",
   public_link: "公開中",
 };
-
-export const DEMO_USERS = [
-  { id: "user_demo_owner", email: "mika@example.com", name: "美香", password: "demo1234" },
-  { id: "user_demo_partner", email: "takumi@example.com", name: "匠", password: "demo1234" },
-];

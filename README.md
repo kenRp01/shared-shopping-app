@@ -10,7 +10,8 @@ ShareShopi は、家族や同居人、パートナーなど複数人で同じ買
 
 ## 主な機能
 
-- メール+パスワード形式のローカル認証デモ
+- Supabase Auth + Google アカウントログイン
+- ログイン不要のひとり利用
 - 同じリストの共有
 - 公開リンクによる閲覧専用ページ
 - 商品ごとの日付・時刻・リマインド設定
@@ -24,10 +25,22 @@ npm install
 npm run dev
 ```
 
-`/login` で以下のデモアカウントを使えます。
+個人利用だけなら、未ログインのまま「ひとりで使う」から始められます。
+共有機能を使う場合は `/login` から Google アカウントでログインしてください。
 
-- `mika@example.com / demo1234`
-- `takumi@example.com / demo1234`
+## Googleログイン設定
+
+ShareShopi は Supabase Auth の Google Provider を使います。コード側の実装に加えて、以下の管理画面設定が必要です。
+
+1. Google Cloud Console でプロジェクトを作成または選択する。
+2. `APIs & Services > OAuth consent screen` でアプリ名 `ShareShopi` とサポートメールを設定する。
+3. `APIs & Services > Credentials` で `OAuth client ID` を作成する。
+4. Application type は `Web application` を選ぶ。
+5. Authorized JavaScript origins に `http://localhost:3001` と `https://shareshopi.vercel.app` を登録する。
+6. Authorized redirect URIs に Supabase の Google callback URL を登録する。
+7. Supabase Dashboard の `Authentication > Providers > Google` で Google Provider を有効化する。
+8. Google の Client ID / Client Secret を Supabase に登録する。
+9. Supabase の `Authentication > URL Configuration` に `http://localhost:3001` と `https://shareshopi.vercel.app` を追加する。
 
 ## 環境変数
 

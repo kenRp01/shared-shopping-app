@@ -1,5 +1,5 @@
-import { AuthForm } from "@/components/auth-form";
+import { redirect } from "next/navigation";
 
 export default function SignupPage() {
-  return <AuthForm mode="signup" />;
+  redirect("/login");
 }

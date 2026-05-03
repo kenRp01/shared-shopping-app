@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { getCurrentUser, getListSnapshot, updateListSettings, addListMember, listAccessibleLists, removeList } from "@/lib/local-store";
+import { getCurrentUser, getListSnapshot, updateListSettings, addListMember, listAccessibleLists, removeList, updateUserProfile } from "@/lib/local-store";
 import type { ShoppingListSnapshot, UserProfile } from "@/lib/types";
 
 type Props = {
@@ -15,12 +15,14 @@ export function ListSettingsClient({ listId }: Props) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [snapshot, setSnapshot] = useState<ShoppingListSnapshot | null>(null);
   const [shareEmail, setShareEmail] = useState("");
+  const [profileName, setProfileName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   async function refresh(currentUser?: UserProfile | null) {
     const nextUser = currentUser ?? (await getCurrentUser());
     setUser(nextUser);
+    setProfileName(nextUser?.name ?? "");
     if (nextUser) {
       setSnapshot(await getListSnapshot(listId, nextUser.id));
     }
@@ -39,6 +41,7 @@ export function ListSettingsClient({ listId }: Props) {
   }
 
   const canDeleteList = Boolean(user && snapshot.owner.id === user.id);
+  const isGuestUser = user?.email.endsWith("@shareshopi.local") ?? false;
 
   return (
     <div className="page-grid">
@@ -46,6 +49,36 @@ export function ListSettingsClient({ listId }: Props) {
         <p className="eyebrow">List Settings</p>
         <h2>{snapshot.list.name}</h2>
       </section>
+
+      <form
+        className="panel form-panel"
+        action={() => {
+          startTransition(async () => {
+            try {
+              if (!user) {
+                throw new Error("ログインが必要です。");
+              }
+              const nextUser = await updateUserProfile(user, { name: profileName });
+              await refresh(nextUser);
+              setMessage("ユーザー設定を更新しました。");
+            } catch (error) {
+              setMessage(error instanceof Error ? error.message : "ユーザー設定の更新に失敗しました。");
+            }
+          });
+        }}
+      >
+        <div className="compact-heading">
+          <p className="eyebrow">User</p>
+          <h2>ユーザー設定</h2>
+        </div>
+        <label>
+          表示名
+          <input value={profileName} onChange={(event) => setProfileName(event.target.value)} placeholder="表示名" />
+        </label>
+        <button type="submit" className="primary-button" disabled={isPending}>
+          {isPending ? "保存中..." : "ユーザー設定を保存"}
+        </button>
+      </form>
 
       <form
         className="panel form-panel"
@@ -111,8 +144,8 @@ export function ListSettingsClient({ listId }: Props) {
         action={() => {
           startTransition(async () => {
             try {
-              if (!user) {
-                throw new Error("ログインが必要です。");
+              if (!user || isGuestUser) {
+                throw new Error("共有するにはGoogleログインが必要です。");
               }
               await addListMember(listId, shareEmail, user);
               setShareEmail("");
@@ -128,11 +161,21 @@ export function ListSettingsClient({ listId }: Props) {
           <p className="eyebrow">Members</p>
           <h2>メンバー</h2>
         </div>
-        <label>
-          登録済みユーザーのメールアドレス
-          <input type="email" value={shareEmail} onChange={(event) => setShareEmail(event.target.value)} placeholder="takumi@example.com" />
-        </label>
-        <button type="submit" className="primary-button" disabled={isPending}>共有メンバーに追加</button>
+        {isGuestUser ? (
+          <div className="demo-box">
+            <strong>ログインが必要です</strong>
+            <p>ひとり利用のリストはこの端末だけで使えます。ユーザー間で共有する場合は、Googleでログインしてください。</p>
+            <Link href="/login" className="primary-button compact-button">Googleでログイン</Link>
+          </div>
+        ) : (
+          <>
+            <label>
+              登録済みユーザーのメールアドレス
+              <input type="email" value={shareEmail} onChange={(event) => setShareEmail(event.target.value)} placeholder="takumi@example.com" />
+            </label>
+            <button type="submit" className="primary-button" disabled={isPending}>共有メンバーに追加</button>
+          </>
+        )}
         <div className="member-list">
           {snapshot.members.map((member) => (
             <div className="member-row" key={member.id}>

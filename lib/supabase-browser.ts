@@ -1,4 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+type SupabaseDatabase = any;
+
+let browserClient: SupabaseClient<SupabaseDatabase> | null = null;
 
 function requirePublicEnv() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -18,5 +22,8 @@ export function createSupabaseBrowserClient() {
   if (!env) {
     return null;
   }
-  return createClient(env.url, env.anonKey);
+  if (!browserClient) {
+    browserClient = createClient<SupabaseDatabase>(env.url, env.anonKey);
+  }
+  return browserClient;
 }

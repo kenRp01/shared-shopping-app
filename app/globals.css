@@ -158,6 +158,12 @@ main {
   text-transform: uppercase;
 }
 
+.muted-text {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .lead-copy,
 .compact-copy,
 .list-card p,
@@ -357,6 +363,20 @@ main {
   background: var(--accent-strong);
   color: white;
   box-shadow: 0 10px 22px rgba(28, 61, 49, 0.16);
+}
+
+.google-button {
+  width: 100%;
+  gap: 10px;
+}
+
+.google-button svg {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  padding: 2px;
+  border-radius: 999px;
+  background: white;
 }
 
 .ghost-button {
