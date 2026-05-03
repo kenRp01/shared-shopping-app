@@ -13,6 +13,12 @@ export const shareMemberSchema = z.object({
   email: z.string().email(),
 });
 
+export const emailAuthSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8).max(72),
+  name: z.string().max(40).optional(),
+});
+
 export const createItemSchema = z.object({
   title: z.string().min(1).max(80),
   quantity: z.string().min(1).max(30),

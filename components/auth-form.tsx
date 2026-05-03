@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { signInWithGoogle } from "@/lib/local-store";
+import { signInWithEmail, signInWithGoogle, signUpWithEmail } from "@/lib/local-store";
 
 export function AuthForm() {
+  const router = useRouter();
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -46,6 +49,69 @@ export function AuthForm() {
           <GoogleIcon />
           {isPending ? "Googleへ移動中..." : "Googleでログイン"}
         </button>
+        <div className="auth-divider"><span>または</span></div>
+        <form
+          className="email-auth-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const formData = new FormData(event.currentTarget);
+            const email = String(formData.get("email") ?? "");
+            const password = String(formData.get("password") ?? "");
+            const name = String(formData.get("name") ?? "");
+
+            startTransition(async () => {
+              try {
+                setMessage(null);
+                if (mode === "signup") {
+                  const result = await signUpWithEmail({ email, password, name });
+                  if (result.needsConfirmation) {
+                    setMessage("確認メールを送信しました。メール内のリンクからログインを完了してください。");
+                    return;
+                  }
+                } else {
+                  await signInWithEmail({ email, password });
+                }
+                router.push("/");
+              } catch (error) {
+                setMessage(error instanceof Error ? error.message : "メールログインに失敗しました。");
+              }
+            });
+          }}
+        >
+          <div className="auth-mode-switch" role="tablist" aria-label="メール認証の切り替え">
+            <button
+              type="button"
+              className={mode === "login" ? "active" : ""}
+              aria-pressed={mode === "login"}
+              onClick={() => setMode("login")}
+            >
+              メールログイン
+            </button>
+            <button
+              type="button"
+              className={mode === "signup" ? "active" : ""}
+              aria-pressed={mode === "signup"}
+              onClick={() => setMode("signup")}
+            >
+              新規登録
+            </button>
+          </div>
+          {mode === "signup" ? (
+            <input name="name" type="text" maxLength={40} placeholder="表示名" autoComplete="name" />
+          ) : null}
+          <input name="email" type="email" placeholder="メールアドレス" autoComplete="email" required />
+          <input
+            name="password"
+            type="password"
+            placeholder="パスワード"
+            autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            minLength={8}
+            required
+          />
+          <button type="submit" className="ghost-button email-auth-submit" disabled={isPending}>
+            {isPending ? "処理中..." : mode === "signup" ? "メールで登録" : "メールでログイン"}
+          </button>
+        </form>
         {message ? <p className="notice-inline">{message}</p> : null}
         <p className="compact-copy">
           共有機能を使う場合のみログインが必要です。個人利用だけならトップからそのまま始められます。

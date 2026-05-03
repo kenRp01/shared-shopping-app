@@ -25,6 +25,7 @@ import { formatRelativeDue, makeId, todayKey } from "@/lib/utils";
 import {
   createItemSchema,
   createListSchema,
+  emailAuthSchema,
   shareMemberSchema,
   updateReminderSettingsSchema,
 } from "@/lib/validation";
@@ -429,6 +430,74 @@ export async function signInWithGoogle() {
   if (error) {
     throw new Error(error.message);
   }
+}
+
+export async function signInWithEmail(payload: { email: string; password: string }) {
+  const parsed = emailAuthSchema.pick({ email: true, password: true }).safeParse(payload);
+  if (!parsed.success) {
+    throw new Error("メールアドレスと8文字以上のパスワードを入力してください。");
+  }
+
+  const supabase = createSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error("Supabase の接続設定を確認してください。");
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: parsed.data.email,
+    password: parsed.data.password,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (data.user?.email) {
+    await syncSupabaseUserToLocal({
+      id: data.user.id,
+      email: data.user.email,
+      name: typeof data.user.user_metadata?.name === "string" ? data.user.user_metadata.name : null,
+      persistSession: true,
+    });
+  }
+}
+
+export async function signUpWithEmail(payload: { email: string; password: string; name?: string }) {
+  const parsed = emailAuthSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new Error("メールアドレスと8文字以上のパスワードを入力してください。");
+  }
+
+  const supabase = createSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error("Supabase の接続設定を確認してください。");
+  }
+
+  const displayName = deriveName(parsed.data.email, parsed.data.name);
+  const { data, error } = await supabase.auth.signUp({
+    email: parsed.data.email,
+    password: parsed.data.password,
+    options: {
+      data: { name: displayName },
+      emailRedirectTo: `${window.location.origin}/auth/callback`,
+    },
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (data.user?.email && data.session) {
+    await syncSupabaseUserToLocal({
+      id: data.user.id,
+      email: data.user.email,
+      name: displayName,
+      persistSession: true,
+    });
+    return { needsConfirmation: false };
+  }
+
+  return { needsConfirmation: true };
 }
 
 export async function signOutLocal() {
