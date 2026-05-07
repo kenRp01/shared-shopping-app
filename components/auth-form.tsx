@@ -2,14 +2,20 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { signInWithEmail, signInWithGoogle, signUpWithEmail } from "@/lib/local-store";
 
 export function AuthForm() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [message, setMessage] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const isDisabled = !isReady || isPending;
+
+  useEffect(() => {
+    setIsReady(true);
+  }, []);
 
   return (
     <div className="auth-layout">
@@ -34,7 +40,7 @@ export function AuthForm() {
         <button
           type="button"
           className="primary-button google-button"
-          disabled={isPending}
+          disabled={isDisabled}
           onClick={() => {
             startTransition(async () => {
               try {
@@ -51,6 +57,8 @@ export function AuthForm() {
         </button>
         <div className="auth-divider"><span>または</span></div>
         <form
+          action="/login"
+          method="post"
           className="email-auth-form"
           onSubmit={(event) => {
             event.preventDefault();
@@ -77,12 +85,13 @@ export function AuthForm() {
               }
             });
           }}
-        >
+          >
           <div className="auth-mode-switch" role="tablist" aria-label="メール認証の切り替え">
             <button
               type="button"
               className={mode === "login" ? "active" : ""}
               aria-pressed={mode === "login"}
+              disabled={isDisabled}
               onClick={() => setMode("login")}
             >
               メールログイン
@@ -91,15 +100,16 @@ export function AuthForm() {
               type="button"
               className={mode === "signup" ? "active" : ""}
               aria-pressed={mode === "signup"}
+              disabled={isDisabled}
               onClick={() => setMode("signup")}
             >
               新規登録
             </button>
           </div>
           {mode === "signup" ? (
-            <input name="name" type="text" maxLength={40} placeholder="表示名" autoComplete="name" />
+            <input name="name" type="text" maxLength={40} placeholder="表示名" autoComplete="name" disabled={isDisabled} />
           ) : null}
-          <input name="email" type="email" placeholder="メールアドレス" autoComplete="email" required />
+          <input name="email" type="email" placeholder="メールアドレス" autoComplete="email" required disabled={isDisabled} />
           <input
             name="password"
             type="password"
@@ -107,9 +117,10 @@ export function AuthForm() {
             autoComplete={mode === "signup" ? "new-password" : "current-password"}
             minLength={8}
             required
+            disabled={isDisabled}
           />
-          <button type="submit" className="ghost-button email-auth-submit" disabled={isPending}>
-            {isPending ? "処理中..." : mode === "signup" ? "メールで登録" : "メールでログイン"}
+          <button type="submit" className="ghost-button email-auth-submit" disabled={isDisabled}>
+            {!isReady ? "準備中..." : isPending ? "処理中..." : mode === "signup" ? "メールで登録" : "メールでログイン"}
           </button>
         </form>
         {message ? <p className="notice-inline">{message}</p> : null}

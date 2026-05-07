@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { DEFAULT_ITEM_FORM, DEFAULT_LIST_FORM } from "@/lib/constants";
 import {
@@ -24,10 +25,12 @@ type Props = {
 };
 
 export function ListDetailClient({ listId, publicToken }: Props) {
+  const router = useRouter();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [snapshot, setSnapshot] = useState<ShoppingListSnapshot | null>(null);
   const [categories, setCategories] = useState<ShoppingListOverview[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [isResolvingList, setIsResolvingList] = useState(true);
   const [form, setForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
@@ -40,10 +43,13 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const [isPending, startTransition] = useTransition();
 
   async function refresh(currentUser?: UserProfile | null) {
+    setIsResolvingList(true);
     const nextUser = currentUser ?? (await getCurrentUser());
     setUser(nextUser);
+    let nextCategories: ShoppingListOverview[] = [];
     if (nextUser) {
-      setCategories(await listAccessibleLists(nextUser.id));
+      nextCategories = await listAccessibleLists(nextUser.id);
+      setCategories(nextCategories);
     } else {
       setCategories([]);
     }
@@ -52,7 +58,26 @@ export function ListDetailClient({ listId, publicToken }: Props) {
       : listId
         ? await getListSnapshot(listId, nextUser?.id)
         : null;
+
+    if (!nextSnapshot && listId && nextUser && !publicToken) {
+      const fallbackList = nextCategories.find((list) => list.id !== listId) ?? nextCategories[0];
+      if (fallbackList) {
+        router.replace(`/lists/${fallbackList.id}`);
+        return;
+      }
+
+      const starter = await createList(nextUser, {
+        ...DEFAULT_LIST_FORM,
+        name: "マイリスト",
+        plannedDate: null,
+        visibility: "private",
+      });
+      router.replace(`/lists/${starter.id}`);
+      return;
+    }
+
     setSnapshot(nextSnapshot);
+    setIsResolvingList(false);
   }
 
   function removeItemFromView(itemId: string) {
@@ -81,7 +106,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   if (!snapshot) {
     return (
       <section className="panel">
-        <h2>表示できません</h2>
+        <h2>{isResolvingList ? "マイリストを開いています" : "マイリストを開けませんでした"}</h2>
       </section>
     );
   }

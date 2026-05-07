@@ -602,22 +602,17 @@ export async function updateUserProfile(viewer: UserProfile, payload: { name: st
 }
 
 async function listAccessibleListsFromSupabase(viewerId: string) {
-  const supabase = createSupabaseBrowserClient();
-  if (!supabase) {
-    return [];
-  }
-
-  const [{ data: listRows, error: listError }, { data: memberRows, error: memberError }, { data: itemRows, error: itemError }, { data: profileRows }] =
-    await Promise.all([
-      supabase.from("shopping_lists").select("*").order("updated_at", { ascending: false }),
-      supabase.from("shopping_list_members").select("*"),
-      supabase.from("shopping_items").select("*"),
-      supabase.from("profiles").select("*"),
-    ]);
-
-  if (listError || memberError || itemError) {
-    throw new Error(listError?.message || memberError?.message || itemError?.message || "リストを取得できませんでした。");
-  }
+  const {
+    lists: listRows,
+    members: memberRows,
+    items: itemRows,
+    profiles: profileRows,
+  } = await requestJson<{
+    lists: SupabaseListRow[];
+    members: SupabaseMemberRow[];
+    items: SupabaseItemRow[];
+    profiles: SupabaseProfileRow[];
+  }>("/api/lists");
 
   const members = ((memberRows ?? []) as SupabaseMemberRow[]).map(toSupabaseMember);
   const profiles = ((profileRows ?? []) as SupabaseProfileRow[]).map(toSupabaseProfile);
@@ -713,41 +708,12 @@ export async function createList(viewer: UserProfile, payload: CreateListPayload
   }
 
   if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      throw new Error("Supabase の接続設定を確認してください。");
-    }
-    const { data: listRow, error: listError } = await supabase
-      .from("shopping_lists")
-      .insert({
-        name: result.data.name,
-        description: result.data.description,
-        planned_date: result.data.plannedDate,
-        visibility: result.data.visibility,
-        owner_user_id: viewer.id,
-        public_token: result.data.visibility === "public_link" ? makeId("public") : null,
-        daily_reminder_enabled: result.data.dailyReminderEnabled,
-        daily_reminder_hour: result.data.dailyReminderHour,
-      })
-      .select("*")
-      .single();
-
-    if (listError || !listRow) {
-      throw new Error(listError?.message || "リストを作成できませんでした。");
-    }
-
-    const { error: memberError } = await supabase.from("shopping_list_members").insert({
-      list_id: listRow.id,
-      user_id: viewer.id,
-      role: "owner",
-      invited_by_user_id: viewer.id,
+    const { list } = await requestJson<{ list: SupabaseListRow }>("/api/lists", {
+      method: "POST",
+      body: JSON.stringify(result.data),
     });
 
-    if (memberError) {
-      throw new Error(memberError.message);
-    }
-
-    return toSupabaseList(listRow as SupabaseListRow);
+    return toSupabaseList(list);
   }
 
   const db = await getDb();
@@ -821,34 +787,24 @@ export async function reorderLists(viewer: UserProfile, orderedListIds: string[]
 
 export async function getListSnapshot(listId: string, viewerId?: string | null): Promise<ShoppingListSnapshot | null> {
   if (hasSupabaseEnv() && viewerId !== GUEST_USER_ID) {
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
+    const response = await requestJson<{
+      list: SupabaseListRow;
+      members: SupabaseMemberRow[];
+      items: SupabaseItemRow[];
+      profiles: SupabaseProfileRow[];
+    }>(`/api/lists/${listId}`).catch(() => null);
+    if (!response?.list) {
       return null;
     }
 
-    const { data: listRow, error: listError } = await supabase
-      .from("shopping_lists")
-      .select("*")
-      .eq("id", listId)
-      .single();
-    if (listError || !listRow) {
-      return null;
-    }
-
-    const [{ data: memberRows }, { data: profileRows }, { data: itemRows }] = await Promise.all([
-      supabase.from("shopping_list_members").select("*").eq("list_id", listId),
-      supabase.from("profiles").select("*"),
-      supabase.from("shopping_items").select("*").eq("list_id", listId),
-    ]);
-
-    const list = toSupabaseList(listRow as SupabaseListRow);
-    const members = ((memberRows ?? []) as SupabaseMemberRow[]).map(toSupabaseMember);
+    const list = toSupabaseList(response.list);
+    const members = ((response.members ?? []) as SupabaseMemberRow[]).map(toSupabaseMember);
     const memberIds = members.map((member) => member.userId);
     if (!canView(list, memberIds, viewerId)) {
       return null;
     }
 
-    const profiles = ((profileRows ?? []) as SupabaseProfileRow[]).map(toSupabaseProfile);
+    const profiles = ((response.profiles ?? []) as SupabaseProfileRow[]).map(toSupabaseProfile);
     const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
     const owner = profileMap.get(list.ownerUserId) ?? {
       id: list.ownerUserId,
@@ -857,7 +813,7 @@ export async function getListSnapshot(listId: string, viewerId?: string | null):
       createdAt: list.createdAt,
     };
 
-    const items = ((itemRows ?? []) as SupabaseItemRow[])
+    const items = ((response.items ?? []) as SupabaseItemRow[])
       .map((row, index) => toSupabaseItem(row, index))
       .filter((item) => {
         if (item.scope === "shared") {
@@ -987,32 +943,11 @@ export async function createItem(listId: string, viewer: UserProfile, payload: C
   }
 
   if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      throw new Error("Supabase の接続設定を確認してください。");
-    }
-    const { data, error } = await supabase
-      .from("shopping_items")
-      .insert({
-        list_id: listId,
-        title: result.data.title,
-        quantity: result.data.quantity,
-        note: result.data.note,
-        status: "pending",
-        scope: result.data.scope,
-        due_date: result.data.dueDate,
-        due_time: result.data.dueTime,
-        remind_on: result.data.remindOn,
-        reminder_enabled: result.data.reminderEnabled,
-        created_by_user_id: viewer.id,
-        updated_by_user_id: viewer.id,
-      })
-      .select("*")
-      .single();
-    if (error || !data) {
-      throw new Error(error?.message || "商品を追加できませんでした。");
-    }
-    return toSupabaseItem(data as SupabaseItemRow);
+    const { item } = await requestJson<{ item: SupabaseItemRow }>(`/api/lists/${listId}/items`, {
+      method: "POST",
+      body: JSON.stringify(result.data),
+    });
+    return toSupabaseItem(item);
   }
 
   const db = await getDb();
@@ -1115,28 +1050,10 @@ export async function updateItem(
   }
 
   if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      throw new Error("Supabase の接続設定を確認してください。");
-    }
-    const { error } = await supabase
-      .from("shopping_items")
-      .update({
-        list_id: destinationListId,
-        title: result.data.title,
-        quantity: result.data.quantity,
-        note: result.data.note,
-        scope: result.data.scope,
-        due_date: result.data.dueDate,
-        due_time: result.data.dueTime,
-        remind_on: result.data.remindOn,
-        reminder_enabled: result.data.reminderEnabled,
-        updated_by_user_id: viewer.id,
-      })
-      .eq("id", itemId);
-    if (error) {
-      throw new Error(error.message);
-    }
+    await requestJson(`/api/lists/${listId}/items/${itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ payload: result.data, nextListId: destinationListId }),
+    });
     return;
   }
 
@@ -1181,23 +1098,10 @@ export async function toggleItemStatus(listId: string, itemId: string, viewer: U
     throw new Error("このリストを編集する権限がありません。");
   }
   if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
-    const item = snapshot.items.find((entry) => entry.id === itemId);
-    if (!item) {
-      throw new Error("商品が見つかりません。");
-    }
-    const nextStatus = item.status === "pending" ? "purchased" : "pending";
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase!
-      .from("shopping_items")
-      .update({
-        status: nextStatus,
-        purchased_by_user_id: nextStatus === "purchased" ? viewer.id : null,
-        updated_by_user_id: viewer.id,
-      })
-      .eq("id", itemId);
-    if (error) {
-      throw new Error(error.message);
-    }
+    await requestJson(`/api/lists/${listId}/items/${itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ toggleStatus: true }),
+    });
     return;
   }
   const db = await getDb();
@@ -1221,11 +1125,9 @@ export async function removeItem(listId: string, itemId: string, viewer: UserPro
     throw new Error("このリストを編集する権限がありません。");
   }
   if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase!.from("shopping_items").delete().eq("id", itemId);
-    if (error) {
-      throw new Error(error.message);
-    }
+    await requestJson(`/api/lists/${listId}/items/${itemId}`, {
+      method: "DELETE",
+    });
     return;
   }
   const db = await getDb();
@@ -1329,19 +1231,10 @@ export async function updateListSettings(listId: string, viewer: UserProfile, pa
     if (snapshot.owner.id !== viewer.id) {
       throw new Error("共有設定を変更できるのは所有者だけです。");
     }
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase!
-      .from("shopping_lists")
-      .update({
-        visibility: result.data.publicEnabled ? "public_link" : result.data.visibility,
-        public_token: result.data.publicEnabled ? snapshot.list.publicToken ?? makeId("public") : null,
-        daily_reminder_enabled: result.data.dailyReminderEnabled,
-        daily_reminder_hour: result.data.dailyReminderHour,
-      })
-      .eq("id", listId);
-    if (error) {
-      throw new Error(error.message);
-    }
+    await requestJson(`/api/lists/${listId}`, {
+      method: "PATCH",
+      body: JSON.stringify(result.data),
+    });
     return;
   }
 

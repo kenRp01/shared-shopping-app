@@ -42,14 +42,46 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "共有メンバーを追加できるのは所有者だけです。" }, { status: 403 });
   }
 
-  const { data: target, error: targetError } = await admin
+  let { data: target, error: targetError } = await admin
     .from("profiles")
     .select("id,email,name")
     .eq("email", email)
     .single();
 
   if (targetError || !target) {
-    return NextResponse.json({ error: "先に相手がGoogleログインを完了する必要があります。" }, { status: 404 });
+    const { data: usersData, error: usersError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (usersError) {
+      return NextResponse.json({ error: usersError.message }, { status: 500 });
+    }
+    const authUser = usersData.users.find((user) => user.email?.toLowerCase() === email);
+    if (!authUser?.email) {
+      return NextResponse.json({ error: "先に相手がログインまたは新規登録を完了する必要があります。" }, { status: 404 });
+    }
+
+    const metadataName =
+      typeof authUser.user_metadata?.name === "string"
+        ? authUser.user_metadata.name
+        : typeof authUser.user_metadata?.full_name === "string"
+          ? authUser.user_metadata.full_name
+          : "";
+    const name = metadataName || authUser.email.split("@")[0] || "ユーザー";
+    const { data: createdProfile, error: profileError } = await admin
+      .from("profiles")
+      .upsert(
+        {
+          id: authUser.id,
+          email: authUser.email.toLowerCase(),
+          name,
+        },
+        { onConflict: "id" },
+      )
+      .select("id,email,name")
+      .single();
+
+    if (profileError || !createdProfile) {
+      return NextResponse.json({ error: profileError?.message || "共有先ユーザーを登録できませんでした。" }, { status: 500 });
+    }
+    target = createdProfile;
   }
   if (target.id === viewer.id) {
     return NextResponse.json({ error: "自分自身はすでに所有者です。" }, { status: 400 });
