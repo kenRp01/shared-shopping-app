@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { M_PLUS_Rounded_1c, Noto_Sans_JP } from "next/font/google";
+import Link from "next/link";
 import { Nav } from "@/components/nav";
 import "./globals.css";
 
@@ -26,6 +27,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <div className="page-shell">
           <Nav />
           <main>{children}</main>
+          <footer className="site-footer" aria-label="フッター">
+            <Link href="/terms">利用規約</Link>
+            <Link href="/privacy">プライバシー</Link>
+            <Link href="/contact">問い合わせ</Link>
+          </footer>
         </div>
       </body>
     </html>

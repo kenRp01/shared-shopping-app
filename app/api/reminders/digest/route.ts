@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import type { ReminderDigest } from "@/lib/types";
+import { buildReminderDigest } from "@/lib/reminders";
+import { createSupabaseAdminClient } from "@/lib/supabase";
+import type { ReminderDigest, ShoppingItemView, ShoppingListSnapshot, UserProfile } from "@/lib/types";
+import { formatRelativeDue, todayKey } from "@/lib/utils";
 
 type ResendPayload = {
   from: string;
@@ -7,6 +10,166 @@ type ResendPayload = {
   subject: string;
   html: string;
 };
+
+type ReminderListRow = {
+  id: string;
+  name: string;
+  description: string;
+  planned_date: string | null;
+  visibility: "private" | "shared" | "public_link";
+  owner_user_id: string;
+  public_token: string | null;
+  daily_reminder_enabled: boolean;
+  daily_reminder_hour: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type ReminderMemberRow = {
+  id: string;
+  list_id: string;
+  user_id: string;
+  role: "owner" | "editor";
+  invited_by_user_id: string;
+  created_at: string;
+};
+
+type ReminderItemRow = {
+  id: string;
+  list_id: string;
+  title: string;
+  quantity: string;
+  note: string;
+  status: "pending" | "purchased";
+  scope: "shared" | "personal";
+  due_date: string | null;
+  due_time: string | null;
+  remind_on: string | null;
+  reminder_enabled: boolean;
+  created_by_user_id: string;
+  updated_by_user_id: string;
+  purchased_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ReminderProfileRow = {
+  id: string;
+  email: string;
+  name: string;
+  created_at: string;
+};
+
+function isAuthorizedCron(request: Request) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    return process.env.NODE_ENV !== "production";
+  }
+
+  const url = new URL(request.url);
+  const auth = request.headers.get("authorization");
+  return (
+    auth === `Bearer ${secret}` ||
+    request.headers.get("x-cron-secret") === secret ||
+    url.searchParams.get("secret") === secret
+  );
+}
+
+function toProfile(row: ReminderProfileRow): UserProfile {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    createdAt: row.created_at,
+  };
+}
+
+function toSnapshot(
+  list: ReminderListRow,
+  members: ReminderMemberRow[],
+  items: ReminderItemRow[],
+  profiles: ReminderProfileRow[],
+  today: string,
+): ShoppingListSnapshot | null {
+  const profileMap = new Map(profiles.map((profile) => [profile.id, toProfile(profile)]));
+  const owner = profileMap.get(list.owner_user_id);
+  if (!owner) {
+    return null;
+  }
+
+  const itemViews: ShoppingItemView[] = items.map((item, index) => {
+    const createdBy = profileMap.get(item.created_by_user_id);
+    const updatedBy = profileMap.get(item.updated_by_user_id);
+    const purchasedBy = item.purchased_by_user_id ? profileMap.get(item.purchased_by_user_id) : null;
+    return {
+      id: item.id,
+      listId: item.list_id,
+      sortOrder: index,
+      title: item.title,
+      quantity: item.quantity,
+      note: item.note,
+      status: item.status,
+      scope: item.scope,
+      dueDate: item.due_date,
+      dueTime: item.due_time,
+      remindOn: item.remind_on,
+      reminderEnabled: item.reminder_enabled,
+      createdByUserId: item.created_by_user_id,
+      updatedByUserId: item.updated_by_user_id,
+      purchasedByUserId: item.purchased_by_user_id,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
+      createdByName: createdBy?.name ?? "不明",
+      updatedByName: updatedBy?.name ?? "不明",
+      purchasedByName: purchasedBy?.name ?? null,
+      dueState: formatRelativeDue(item.due_date, today),
+      reminderState: formatRelativeDue(item.remind_on ?? item.due_date, today),
+    };
+  });
+
+  return {
+    list: {
+      id: list.id,
+      name: list.name,
+      sortOrder: 0,
+      description: list.description,
+      plannedDate: list.planned_date,
+      visibility: list.visibility,
+      ownerUserId: list.owner_user_id,
+      publicToken: list.public_token,
+      dailyReminderEnabled: list.daily_reminder_enabled,
+      dailyReminderHour: list.daily_reminder_hour,
+      createdAt: list.created_at,
+      updatedAt: list.updated_at,
+    },
+    owner,
+    members: members
+      .map((member) => {
+        const profile = profileMap.get(member.user_id);
+        return profile ? { ...profile, role: member.role } : null;
+      })
+      .filter((profile): profile is UserProfile & { role: "owner" | "editor" } => Boolean(profile)),
+    items: itemViews,
+    permission: "view",
+  };
+}
+
+function hasReminderTargets(digest: ReminderDigest) {
+  return digest.itemGroup.dueToday.length > 0 || digest.itemGroup.overdue.length > 0;
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[char] ?? char;
+  });
+}
 
 function renderDigest(digest: ReminderDigest) {
   const sections = [
@@ -16,16 +179,16 @@ function renderDigest(digest: ReminderDigest) {
 
   return `
     <div style="font-family: sans-serif; line-height: 1.6;">
-      <h2>${digest.listName} の買い物リマインド</h2>
-      <p>${digest.hourLabel} 頃に送る想定のまとめ通知です。</p>
+      <h2>${escapeHtml(digest.listName)} の買い物リマインド</h2>
+      <p>${escapeHtml(digest.hourLabel)} 頃に送る想定のまとめ通知です。</p>
       ${sections
         .map(
           (section) => `
-            <h3>${section.title}</h3>
+            <h3>${escapeHtml(section.title)}</h3>
             <ul>
               ${section.items
                 .map(
-                  (item) => `<li>${item.title} / ${item.quantity} / 追加者: ${item.createdByName} / リマインド日: ${item.remindOn ?? item.dueDate ?? "未設定"} / 期限: ${item.dueDate ?? "未設定"}</li>`,
+                  (item) => `<li>${escapeHtml(item.title)} / ${escapeHtml(item.quantity)} / 追加者: ${escapeHtml(item.createdByName)} / リマインド日: ${escapeHtml(item.remindOn ?? item.dueDate ?? "未設定")} / 期限: ${escapeHtml(item.dueDate ?? "未設定")}</li>`,
                 )
                 .join("")}
             </ul>
@@ -55,19 +218,166 @@ async function sendWithResend(payload: ResendPayload) {
 }
 
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  const headerSecret = request.headers.get("x-cron-secret");
-  if (secret && headerSecret !== secret) {
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  return NextResponse.json({
-    ok: true,
-    message: "Cron endpoint is ready. Supply digests via POST or connect Supabase server-side collection.",
-  });
+  const admin = createSupabaseAdminClient();
+  if (!admin) {
+    return NextResponse.json({ error: "Supabase の管理キーが設定されていません。" }, { status: 500 });
+  }
+
+  const url = new URL(request.url);
+  const dryRun = url.searchParams.get("dryRun") === "1" || url.searchParams.get("dryRun") === "true";
+  const deliveryDate = url.searchParams.get("date") ?? todayKey();
+
+  const { data: lists, error: listError } = await admin
+    .from("shopping_lists")
+    .select("*")
+    .eq("daily_reminder_enabled", true);
+
+  if (listError) {
+    return NextResponse.json({ error: listError.message }, { status: 500 });
+  }
+
+  const listRows = (lists ?? []) as ReminderListRow[];
+  const digests: ReminderDigest[] = [];
+  let skipped = 0;
+  let alreadySent = 0;
+
+  for (const list of listRows) {
+    const { data: existingLog, error: logLookupError } = await admin
+      .from("reminder_delivery_logs")
+      .select("id,status")
+      .eq("list_id", list.id)
+      .eq("delivery_date", deliveryDate)
+      .maybeSingle();
+
+    if (logLookupError) {
+      return NextResponse.json({ error: logLookupError.message }, { status: 500 });
+    }
+    if (existingLog) {
+      alreadySent += 1;
+      continue;
+    }
+
+    const [membersResult, itemsResult] = await Promise.all([
+      admin.from("shopping_list_members").select("*").eq("list_id", list.id),
+      admin
+        .from("shopping_items")
+        .select("*")
+        .eq("list_id", list.id)
+        .eq("status", "pending")
+        .eq("scope", "shared")
+        .eq("reminder_enabled", true)
+        .or(`remind_on.lte.${deliveryDate},and(remind_on.is.null,due_date.lte.${deliveryDate})`),
+    ]);
+
+    if (membersResult.error || itemsResult.error) {
+      return NextResponse.json(
+        { error: membersResult.error?.message || itemsResult.error?.message || "リマインド対象を取得できませんでした。" },
+        { status: 500 },
+      );
+    }
+
+    const memberRows = (membersResult.data ?? []) as ReminderMemberRow[];
+    const profileIds = [
+      ...new Set([
+        list.owner_user_id,
+        ...memberRows.map((member) => member.user_id),
+        ...(((itemsResult.data ?? []) as ReminderItemRow[]).flatMap((item) => [
+          item.created_by_user_id,
+          item.updated_by_user_id,
+          item.purchased_by_user_id,
+        ]).filter(Boolean) as string[]),
+      ]),
+    ];
+
+    const { data: profiles, error: profileError } = profileIds.length
+      ? await admin.from("profiles").select("*").in("id", profileIds)
+      : { data: [], error: null };
+
+    if (profileError) {
+      return NextResponse.json({ error: profileError.message }, { status: 500 });
+    }
+
+    const snapshot = toSnapshot(list, memberRows, (itemsResult.data ?? []) as ReminderItemRow[], (profiles ?? []) as ReminderProfileRow[], deliveryDate);
+    if (!snapshot) {
+      skipped += 1;
+      continue;
+    }
+
+    const recipients = [
+      ...new Map(
+        [snapshot.owner, ...snapshot.members]
+          .filter((profile) => Boolean(profile.email))
+          .map((profile) => [profile.email.toLowerCase(), profile]),
+      ).values(),
+    ];
+    const digest = buildReminderDigest(snapshot, recipients, deliveryDate);
+    if (!hasReminderTargets(digest)) {
+      skipped += 1;
+      if (!dryRun) {
+        await admin.from("reminder_delivery_logs").upsert({
+          list_id: list.id,
+          delivery_date: deliveryDate,
+          status: "skipped",
+          sent_count: 0,
+        });
+      }
+      continue;
+    }
+
+    digests.push(digest);
+  }
+
+  if (dryRun || !process.env.RESEND_API_KEY || !process.env.REMINDER_FROM_EMAIL) {
+    return NextResponse.json({
+      ok: true,
+      dryRun: true,
+      sent: 0,
+      skipped,
+      alreadySent,
+      preview: digests.map((digest) => ({
+        listId: digest.listId,
+        recipients: digest.recipients,
+        dueToday: digest.itemGroup.dueToday.length,
+        overdue: digest.itemGroup.overdue.length,
+      })),
+    });
+  }
+
+  await Promise.all(
+    digests.map((digest) =>
+      sendWithResend({
+        from: process.env.REMINDER_FROM_EMAIL as string,
+        to: digest.recipients,
+        subject: `【買い物リマインド】${digest.listName}`,
+        html: renderDigest(digest),
+      }),
+    ),
+  );
+
+  if (digests.length) {
+    await admin.from("reminder_delivery_logs").upsert(
+      digests.map((digest) => ({
+        list_id: digest.listId,
+        delivery_date: deliveryDate,
+        status: "sent",
+        sent_count: digest.recipients.length,
+      })),
+      { onConflict: "list_id,delivery_date" },
+    );
+  }
+
+  return NextResponse.json({ ok: true, sent: digests.length, skipped, alreadySent });
 }
 
 export async function POST(request: Request) {
+  if (!isAuthorizedCron(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = (await request.json()) as { digests?: ReminderDigest[]; dryRun?: boolean };
   const digests = body.digests ?? [];
 

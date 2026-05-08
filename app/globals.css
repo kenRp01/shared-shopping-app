@@ -221,6 +221,69 @@ main {
   gap: 16px;
 }
 
+.site-footer {
+  max-width: 1160px;
+  margin: 22px auto 0;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.site-footer a {
+  padding: 8px 10px;
+  border-radius: 999px;
+}
+
+.site-footer a:hover {
+  background: rgba(255, 254, 251, 0.8);
+  color: var(--accent-strong);
+}
+
+.legal-page {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.legal-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.legal-panel h2 {
+  font-size: clamp(2rem, 5vw, 3rem);
+}
+
+.legal-panel h3 {
+  margin: 18px 0 0;
+}
+
+.legal-panel p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.8;
+  font-weight: 700;
+}
+
+.support-card {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--accent-soft);
+}
+
+.support-card span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .panel,
 .list-card {
   border-radius: 22px;
@@ -1034,6 +1097,15 @@ main {
   border-color: var(--accent);
   color: white;
   box-shadow: 0 12px 24px rgba(37, 116, 90, 0.2);
+}
+
+.list-section-panel-loading .item-list {
+  opacity: 0.72;
+  transition: opacity 140ms ease;
+}
+
+.list-section-panel-loading .category-pill-active {
+  box-shadow: 0 12px 24px rgba(37, 116, 90, 0.14);
 }
 
 .category-add-button {
