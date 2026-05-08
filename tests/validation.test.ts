@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  contactMessageSchema,
   createItemSchema,
   createListSchema,
   shareMemberSchema,
@@ -55,5 +56,27 @@ describe("updateReminderSettingsSchema", () => {
     });
 
     expect(result.success).toBe(true);
+  });
+});
+
+describe("contactMessageSchema", () => {
+  it("accepts a valid contact message", () => {
+    const result = contactMessageSchema.safeParse({
+      name: "けんすけ",
+      email: "user@example.com",
+      message: "共有リストの使い方について相談したいです。",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects short messages and invalid emails", () => {
+    expect(
+      contactMessageSchema.safeParse({
+        name: "けんすけ",
+        email: "not-an-email",
+        message: "短い",
+      }).success,
+    ).toBe(false);
   });
 });

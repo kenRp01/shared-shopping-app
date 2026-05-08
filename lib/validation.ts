@@ -36,3 +36,9 @@ export const updateReminderSettingsSchema = z.object({
   visibility: z.enum(["private", "shared", "public_link"]),
   publicEnabled: z.boolean(),
 });
+
+export const contactMessageSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  email: z.string().trim().email().max(120),
+  message: z.string().trim().min(10).max(1200),
+});
