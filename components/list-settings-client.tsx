@@ -3,19 +3,51 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { getCurrentUser, getListSnapshot, updateListSettings, addListMember, listAccessibleLists, removeList, updateUserProfile } from "@/lib/local-store";
-import type { ShoppingListSnapshot, UserProfile } from "@/lib/types";
+import { getCurrentUser, getListSnapshot, updateListSettings, addListMember, removeList, updateUserProfile } from "@/lib/local-store";
+import type { ShoppingListOverview, ShoppingListSnapshot, UserProfile } from "@/lib/types";
 
 type Props = {
   listId: string;
 };
 
+type SettingsCache = {
+  user: UserProfile;
+  snapshot: ShoppingListSnapshot;
+  categories: ShoppingListOverview[];
+  cachedAt: number;
+};
+
+const SETTINGS_CACHE_KEY = "shareshopi:settings-list";
+const SETTINGS_CACHE_TTL_MS = 1000 * 60 * 3;
+
+function consumeSettingsCache(listId: string): SettingsCache | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const raw = sessionStorage.getItem(SETTINGS_CACHE_KEY);
+  if (!raw) {
+    return null;
+  }
+  sessionStorage.removeItem(SETTINGS_CACHE_KEY);
+  try {
+    const parsed = JSON.parse(raw) as SettingsCache;
+    if (parsed.snapshot?.list.id !== listId || Date.now() - parsed.cachedAt > SETTINGS_CACHE_TTL_MS) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 export function ListSettingsClient({ listId }: Props) {
   const router = useRouter();
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [snapshot, setSnapshot] = useState<ShoppingListSnapshot | null>(null);
+  const [initialCache] = useState(() => consumeSettingsCache(listId));
+  const [user, setUser] = useState<UserProfile | null>(initialCache?.user ?? null);
+  const [snapshot, setSnapshot] = useState<ShoppingListSnapshot | null>(initialCache?.snapshot ?? null);
+  const [categories, setCategories] = useState<ShoppingListOverview[]>(initialCache?.categories ?? []);
   const [shareEmail, setShareEmail] = useState("");
-  const [profileName, setProfileName] = useState("");
+  const [profileName, setProfileName] = useState(initialCache?.user.name ?? "");
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -29,6 +61,9 @@ export function ListSettingsClient({ listId }: Props) {
   }
 
   useEffect(() => {
+    if (initialCache?.snapshot) {
+      return;
+    }
     refresh();
   }, [listId]);
 
@@ -209,9 +244,11 @@ export function ListSettingsClient({ listId }: Props) {
               }
               startTransition(async () => {
                 try {
-                  await removeList(listId, user);
-                  const remainingLists = await listAccessibleLists(user.id);
-                  router.replace(remainingLists[0] ? `/lists/${remainingLists[0].id}` : "/");
+                  const fallbackList = categories.find((list) => list.id !== listId);
+                  router.replace(fallbackList ? `/lists/${fallbackList.id}` : "/");
+                  removeList(listId, user).catch((error) => {
+                    window.alert(error instanceof Error ? error.message : "リスト削除に失敗しました。");
+                  });
                 } catch (error) {
                   setMessage(error instanceof Error ? error.message : "リスト削除に失敗しました。");
                 }

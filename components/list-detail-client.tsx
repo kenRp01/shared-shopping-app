@@ -7,8 +7,9 @@ import { DEFAULT_ITEM_FORM, DEFAULT_LIST_FORM } from "@/lib/constants";
 import {
   createList,
   createItem,
+  continueAsGuest,
   getCurrentUser,
-  getListSnapshot,
+  getListSnapshotBundle,
   getPublicSnapshot,
   listAccessibleLists,
   removeItem,
@@ -16,21 +17,94 @@ import {
   reorderLists,
   updateItem,
 } from "@/lib/local-store";
-import type { CreateItemPayload, ShoppingItemView, ShoppingListOverview, ShoppingListSnapshot, UserProfile } from "@/lib/types";
-import { cn, formatDate } from "@/lib/utils";
+import type { CreateItemPayload, ShoppingItem, ShoppingItemView, ShoppingList, ShoppingListOverview, ShoppingListSnapshot, UserProfile } from "@/lib/types";
+import { cn, formatDate, formatRelativeDue, makeId, todayKey } from "@/lib/utils";
 
 type Props = {
   listId?: string;
   publicToken?: string;
 };
 
+type DetailCacheEntry = {
+  snapshot: ShoppingListSnapshot;
+  categories: ShoppingListOverview[];
+  cachedAt: number;
+};
+
+type SnapshotBundle = {
+  snapshot: ShoppingListSnapshot | null;
+  categories: ShoppingListOverview[] | null;
+};
+
+const DETAIL_CACHE_TTL_MS = 1000 * 60 * 3;
+const detailCache = new Map<string, DetailCacheEntry>();
+const detailRequests = new Map<string, Promise<SnapshotBundle>>();
+const INITIAL_CACHE_KEY = "shareshopi:initial-list";
+const SETTINGS_CACHE_KEY = "shareshopi:settings-list";
+
+type InitialListCache = {
+  user: UserProfile;
+  snapshot: ShoppingListSnapshot;
+  categories: ShoppingListOverview[];
+  cachedAt: number;
+};
+
+function detailCacheKey(userId: string, listId: string) {
+  return `${userId}:${listId}`;
+}
+
+function consumeInitialListCache(listId?: string): InitialListCache | null {
+  if (typeof window === "undefined" || !listId) {
+    return null;
+  }
+
+  const raw = sessionStorage.getItem(INITIAL_CACHE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  sessionStorage.removeItem(INITIAL_CACHE_KEY);
+  let parsed: InitialListCache;
+  try {
+    parsed = JSON.parse(raw) as InitialListCache;
+  } catch {
+    return null;
+  }
+  if (parsed.snapshot?.list.id !== listId || Date.now() - parsed.cachedAt > DETAIL_CACHE_TTL_MS) {
+    return null;
+  }
+
+  detailCache.set(detailCacheKey(parsed.user.id, listId), {
+    snapshot: parsed.snapshot,
+    categories: parsed.categories,
+    cachedAt: parsed.cachedAt,
+  });
+  return parsed;
+}
+
+function loadSnapshotBundle(listId: string, userId?: string | null) {
+  const requestKey = `${userId ?? "guest"}:${listId}`;
+  const existing = detailRequests.get(requestKey);
+  if (existing) {
+    return existing;
+  }
+
+  const request = getListSnapshotBundle(listId, userId).finally(() => {
+    detailRequests.delete(requestKey);
+  });
+  detailRequests.set(requestKey, request);
+  return request;
+}
+
 export function ListDetailClient({ listId, publicToken }: Props) {
   const router = useRouter();
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [snapshot, setSnapshot] = useState<ShoppingListSnapshot | null>(null);
-  const [categories, setCategories] = useState<ShoppingListOverview[]>([]);
+  const [initialCache] = useState(() => consumeInitialListCache(listId));
+  const [activeListId, setActiveListId] = useState(listId);
+  const [user, setUser] = useState<UserProfile | null>(initialCache?.user ?? null);
+  const [snapshot, setSnapshot] = useState<ShoppingListSnapshot | null>(initialCache?.snapshot ?? null);
+  const [categories, setCategories] = useState<ShoppingListOverview[]>(initialCache?.categories ?? []);
   const [message, setMessage] = useState<string | null>(null);
-  const [isResolvingList, setIsResolvingList] = useState(true);
+  const [isResolvingList, setIsResolvingList] = useState(!initialCache?.snapshot);
   const [form, setForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
@@ -38,46 +112,89 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [showCategoryCreate, setShowCategoryCreate] = useState(false);
   const [categoryFormName, setCategoryFormName] = useState("");
+  const [optimisticListId, setOptimisticListId] = useState<string | null>(null);
   const [draggingCategoryId, setDraggingCategoryId] = useState<string | null>(null);
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
-  async function refresh(currentUser?: UserProfile | null) {
-    setIsResolvingList(true);
-    const nextUser = currentUser ?? (await getCurrentUser());
-    setUser(nextUser);
-    let nextCategories: ShoppingListOverview[] = [];
-    if (nextUser) {
-      nextCategories = await listAccessibleLists(nextUser.id);
-      setCategories(nextCategories);
-    } else {
-      setCategories([]);
+  async function refresh(currentUser?: UserProfile | null, options: { useCache?: boolean; listId?: string | null } = {}) {
+    const targetListId = options.listId ?? activeListId;
+    if (!snapshot) {
+      setIsResolvingList(true);
     }
-    const nextSnapshot = publicToken
-      ? await getPublicSnapshot(publicToken)
-      : listId
-        ? await getListSnapshot(listId, nextUser?.id)
-        : null;
+    try {
+      const nextUser = currentUser ?? (await getCurrentUser());
+      setUser(nextUser);
+      const cacheKey = nextUser && targetListId && !publicToken ? detailCacheKey(nextUser.id, targetListId) : null;
+      const cached = cacheKey ? detailCache.get(cacheKey) : null;
+      if (options.useCache !== false && cached && Date.now() - cached.cachedAt < DETAIL_CACHE_TTL_MS) {
+        setSnapshot(cached.snapshot);
+        setCategories(cached.categories);
+        setOptimisticListId(null);
+        setIsResolvingList(false);
+      }
 
-    if (!nextSnapshot && listId && nextUser && !publicToken) {
-      const fallbackList = nextCategories.find((list) => list.id !== listId) ?? nextCategories[0];
-      if (fallbackList) {
-        router.replace(`/lists/${fallbackList.id}`);
+      let nextCategories: ShoppingListOverview[] = [];
+      let nextSnapshot: ShoppingListSnapshot | null = null;
+      if (publicToken) {
+        nextSnapshot = await getPublicSnapshot(publicToken);
+      } else if (targetListId) {
+        const bundle = await loadSnapshotBundle(targetListId, nextUser?.id);
+        nextSnapshot = bundle.snapshot;
+        if (bundle.categories) {
+          nextCategories = bundle.categories;
+        } else if (nextUser) {
+          nextCategories = await listAccessibleLists(nextUser.id);
+        }
+      } else if (nextUser) {
+        nextCategories = await listAccessibleLists(nextUser.id);
+      }
+
+      setCategories(nextCategories);
+
+      if (!nextSnapshot && targetListId && !publicToken) {
+        if (nextUser) {
+          const fallbackList = nextCategories.find((list) => list.id !== targetListId) ?? nextCategories[0];
+          if (fallbackList) {
+            router.replace(`/lists/${fallbackList.id}`);
+            return;
+          }
+
+          const starter = await createList(nextUser, {
+            ...DEFAULT_LIST_FORM,
+            name: "マイリスト",
+            plannedDate: null,
+            visibility: "private",
+          });
+          router.replace(`/lists/${starter.id}`);
+          return;
+        }
+
+        const guest = await continueAsGuest();
+        router.replace(`/lists/${guest.listId}`);
         return;
       }
 
-      const starter = await createList(nextUser, {
-        ...DEFAULT_LIST_FORM,
-        name: "マイリスト",
-        plannedDate: null,
-        visibility: "private",
-      });
-      router.replace(`/lists/${starter.id}`);
-      return;
+      setSnapshot(nextSnapshot);
+      if (cacheKey && nextSnapshot) {
+        detailCache.set(cacheKey, {
+          snapshot: nextSnapshot,
+          categories: nextCategories,
+          cachedAt: Date.now(),
+        });
+      }
+      setOptimisticListId(null);
+    } catch (error) {
+      if (!publicToken) {
+        const guest = await continueAsGuest();
+        router.replace(`/lists/${guest.listId}`);
+        return;
+      }
+      setSnapshot(null);
+      setOptimisticListId(null);
+    } finally {
+      setIsResolvingList(false);
     }
-
-    setSnapshot(nextSnapshot);
-    setIsResolvingList(false);
   }
 
   function removeItemFromView(itemId: string) {
@@ -90,9 +207,167 @@ export function ListDetailClient({ listId, publicToken }: Props) {
     });
   }
 
+  function toItemViewFromItem(item: ShoppingItem, fallbackUser: UserProfile): ShoppingItemView {
+    const displayName = fallbackUser.name || fallbackUser.email.split("@")[0] || "ユーザー";
+    return {
+      ...item,
+      createdByName: displayName,
+      updatedByName: displayName,
+      purchasedByName: null,
+      dueState: formatRelativeDue(item.dueDate, todayKey()),
+      reminderState: formatRelativeDue(item.remindOn ?? item.dueDate, todayKey()),
+    };
+  }
+
+  function makeOptimisticItem(title: string, payload: CreateItemPayload, viewer: UserProfile, index: number): ShoppingItemView {
+    const now = new Date().toISOString();
+    return toItemViewFromItem(
+      {
+        id: makeId("item_pending"),
+        listId: snapshot?.list.id ?? activeListId ?? "",
+        sortOrder: pendingItems.length + index,
+        title,
+        quantity: payload.quantity,
+        note: payload.note,
+        status: "pending",
+        scope: payload.scope,
+        dueDate: payload.dueDate,
+        dueTime: payload.dueTime,
+        remindOn: payload.remindOn,
+        reminderEnabled: payload.reminderEnabled,
+        createdByUserId: viewer.id,
+        updatedByUserId: viewer.id,
+        purchasedByUserId: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      viewer,
+    );
+  }
+
+  function updateItemsInView(updater: (items: ShoppingItemView[]) => ShoppingItemView[]) {
+    setSnapshot((current) => {
+      if (!current) return current;
+      const next = {
+        ...current,
+        items: updater(current.items),
+      };
+      if (user && activeListId) {
+        const cacheKey = detailCacheKey(user.id, activeListId);
+        const cached = detailCache.get(cacheKey);
+        detailCache.set(cacheKey, {
+          snapshot: next,
+          categories: cached?.categories ?? categories,
+          cachedAt: Date.now(),
+        });
+      }
+      return next;
+    });
+  }
+
+  function toOverviewFromList(list: ShoppingList, viewer: UserProfile, pendingCount = 0): ShoppingListOverview {
+    return {
+      ...list,
+      ownerName: viewer.name,
+      memberNames: [viewer.name],
+      memberCount: 1,
+      pendingCount,
+      purchasedCount: 0,
+      dueTodayCount: 0,
+      overdueCount: 0,
+      reminderTodayCount: 0,
+      viewerRole: "owner",
+    };
+  }
+
+  function makeOptimisticList(name: string, viewer: UserProfile): ShoppingList {
+    const now = new Date().toISOString();
+    return {
+      id: makeId("list_pending"),
+      name,
+      sortOrder: 0,
+      description: "",
+      plannedDate: null,
+      visibility: "private",
+      ownerUserId: viewer.id,
+      publicToken: null,
+      dailyReminderEnabled: DEFAULT_LIST_FORM.dailyReminderEnabled,
+      dailyReminderHour: DEFAULT_LIST_FORM.dailyReminderHour,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  function updateCategoryCache(nextCategories: ShoppingListOverview[], targetSnapshot = snapshot) {
+    if (!user || !activeListId || !targetSnapshot) {
+      return;
+    }
+    detailCache.set(detailCacheKey(user.id, activeListId), {
+      snapshot: targetSnapshot,
+      categories: nextCategories,
+      cachedAt: Date.now(),
+    });
+  }
+
+  function updateCategoriesInView(updater: (current: ShoppingListOverview[]) => ShoppingListOverview[]) {
+    setCategories((current) => {
+      const next = updater(current);
+      updateCategoryCache(next);
+      return next;
+    });
+  }
+
+  function cacheSettingsView() {
+    if (!user || !snapshot) {
+      return;
+    }
+
+    sessionStorage.setItem(
+      SETTINGS_CACHE_KEY,
+      JSON.stringify({
+        user,
+        snapshot,
+        categories,
+        cachedAt: Date.now(),
+      }),
+    );
+  }
+
+  function switchList(nextListId: string) {
+    if (nextListId === activeListId) {
+      return;
+    }
+
+    const cached = user ? detailCache.get(detailCacheKey(user.id, nextListId)) : null;
+    setOptimisticListId(nextListId);
+    if (cached && Date.now() - cached.cachedAt < DETAIL_CACHE_TTL_MS) {
+      setSnapshot(cached.snapshot);
+      setCategories(cached.categories);
+      setOptimisticListId(null);
+      setIsResolvingList(false);
+    }
+    setActiveListId(nextListId);
+    window.history.pushState(null, "", `/lists/${nextListId}`);
+  }
+
   useEffect(() => {
-    refresh();
-  }, [listId, publicToken]);
+    setActiveListId(listId);
+  }, [listId]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const nextListId = window.location.pathname.match(/^\/lists\/([^/]+)/)?.[1];
+      if (nextListId) {
+        setActiveListId(nextListId);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    refresh(undefined, { useCache: true, listId: activeListId });
+  }, [activeListId, publicToken]);
 
   const pendingItems = snapshot?.items.filter((item) => item.status === "pending") ?? [];
 
@@ -105,13 +380,14 @@ export function ListDetailClient({ listId, publicToken }: Props) {
 
   if (!snapshot) {
     return (
-      <section className="panel">
-        <h2>{isResolvingList ? "マイリストを開いています" : "マイリストを開けませんでした"}</h2>
-      </section>
+      <div className="page-grid detail-shell">
+        <section className="panel list-section-panel" aria-busy={isResolvingList} />
+      </div>
     );
   }
 
   const activeListName = snapshot.list.name;
+  const activeCategoryId = optimisticListId ?? activeListId ?? snapshot.list.id;
   const hasSharedContext = snapshot.list.visibility !== "private" || snapshot.members.some((member) => member.id !== snapshot.owner.id);
 
   return (
@@ -122,20 +398,26 @@ export function ListDetailClient({ listId, publicToken }: Props) {
             className="form-panel quick-add-form"
             action={() => {
               startTransition(async () => {
+                const currentUser = user;
+                const currentSnapshot = snapshot;
+                let optimisticIds = new Set<string>();
                 try {
-                  if (!user) {
+                  if (!currentUser || !currentSnapshot) {
                     throw new Error("ログインが必要です。");
                   }
                   const titles = parseQuickAddTitles(form.title);
                   if (titles.length === 0) {
                     throw new Error("商品名を入力してください。");
                   }
-                  await Promise.all(
-                    titles.map((title) =>
-                      createItem(snapshot.list.id, user, {
-                        ...form,
-                        title,
-                      }),
+                  const payload = form;
+                  const optimisticItems = titles.map((title, index) => makeOptimisticItem(title, payload, currentUser, index));
+                  optimisticIds = new Set(optimisticItems.map((item) => item.id));
+                  updateItemsInView((items) => [...optimisticItems, ...items]);
+                  updateCategoriesInView((current) =>
+                    current.map((category) =>
+                      category.id === currentSnapshot.list.id
+                        ? { ...category, pendingCount: category.pendingCount + optimisticItems.length }
+                        : category,
                     ),
                   );
                   setForm((current) => ({
@@ -148,9 +430,32 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                     remindOn: current.remindOn,
                     reminderEnabled: current.reminderEnabled,
                   }));
-                  await refresh(user);
                   setMessage(null);
+
+                  const savedItems = await Promise.all(
+                    titles.map((title) =>
+                      createItem(currentSnapshot.list.id, currentUser, {
+                        ...payload,
+                        title,
+                      }),
+                    ),
+                  );
+                  const savedViews = savedItems.map((item) => toItemViewFromItem(item, currentUser));
+                  updateItemsInView((items) => {
+                    const remaining = items.filter((item) => !optimisticIds.has(item.id));
+                    return [...savedViews, ...remaining];
+                  });
                 } catch (error) {
+                  if (optimisticIds.size > 0) {
+                    updateItemsInView((items) => items.filter((item) => !optimisticIds.has(item.id)));
+                    updateCategoriesInView((current) =>
+                      current.map((category) =>
+                        category.id === currentSnapshot.list.id
+                          ? { ...category, pendingCount: Math.max(0, category.pendingCount - optimisticIds.size) }
+                          : category,
+                      ),
+                    );
+                  }
                   setMessage(error instanceof Error ? error.message : "商品追加に失敗しました。");
                 }
               });
@@ -170,8 +475,8 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                 />
               </label>
 
-              <button type="submit" className="primary-button quick-add-submit" disabled={isPending}>
-                {isPending ? "追加中..." : "追加"}
+              <button type="submit" className="primary-button quick-add-submit">
+                追加
               </button>
             </div>
             {message ? <p className="notice-inline">{message}</p> : null}
@@ -179,7 +484,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
         </section>
       ) : null}
 
-      <section className="panel list-section-panel">
+      <section className={cn("panel list-section-panel", isResolvingList && "list-section-panel-loading")}>
         {categories.length ? (
           <div className="category-strip-wrap">
             <div className="category-strip" aria-label="カテゴリー切り替え">
@@ -219,10 +524,10 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                   startTransition(async () => {
                     try {
                       await reorderLists(user, orderedIds);
-                      await refresh(user);
+                      await refresh(user, { useCache: false });
                     } catch (error) {
                       setMessage(error instanceof Error ? error.message : "並び替えできませんでした。");
-                      await refresh(user);
+                      await refresh(user, { useCache: false });
                     } finally {
                       setDraggingCategoryId(null);
                     }
@@ -231,7 +536,11 @@ export function ListDetailClient({ listId, publicToken }: Props) {
               >
                 <Link
                   href={`/lists/${category.id}`}
-                  className={cn("category-pill", category.id === snapshot.list.id && "category-pill-active")}
+                  className={cn("category-pill", category.id === activeCategoryId && "category-pill-active")}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    switchList(category.id);
+                  }}
                 >
                   {category.name}
                 </Link>
@@ -253,22 +562,62 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                 className="category-create-inline"
                 action={() => {
                   startTransition(async () => {
+                    let optimisticListId: string | null = null;
                     try {
                       if (!user) {
                         throw new Error("ログインが必要です。");
                       }
+                      const name = categoryFormName.trim() || "マイリスト";
+                      const optimisticList = makeOptimisticList(name, user);
+                      optimisticListId = optimisticList.id;
+                      const optimisticOverview = toOverviewFromList(optimisticList, user);
+                      const optimisticSnapshot: ShoppingListSnapshot = {
+                        list: optimisticList,
+                        owner: user,
+                        members: [{ ...user, role: "owner" }],
+                        items: [],
+                        permission: "edit",
+                      };
+                      const nextCategories = [optimisticOverview, ...categories];
+                      setCategories(nextCategories);
+                      setSnapshot(optimisticSnapshot);
+                      setActiveListId(optimisticList.id);
+                      setOptimisticListId(null);
+                      setCategoryFormName("");
+                      setShowCategoryCreate(false);
+                      setMessage(null);
+                      window.history.pushState(null, "", `/lists/${optimisticList.id}`);
+
                       const created = await createList(user, {
                         ...DEFAULT_LIST_FORM,
-                        name: categoryFormName.trim() || "マイリスト",
+                        name,
                         plannedDate: null,
                         visibility: "private",
                       });
-                      setCategoryFormName("");
-                      setShowCategoryCreate(false);
-                      await refresh(user);
-                      setMessage(null);
-                      window.location.href = `/lists/${created.id}`;
+                      const savedOverview = toOverviewFromList(created, user);
+                      const savedSnapshot: ShoppingListSnapshot = {
+                        ...optimisticSnapshot,
+                        list: created,
+                      };
+                      const savedCategories = nextCategories.map((category) => (category.id === optimisticList.id ? savedOverview : category));
+                      setCategories(savedCategories);
+                      setSnapshot(savedSnapshot);
+                      setActiveListId(created.id);
+                      detailCache.delete(detailCacheKey(user.id, optimisticList.id));
+                      detailCache.set(detailCacheKey(user.id, created.id), {
+                        snapshot: savedSnapshot,
+                        categories: savedCategories,
+                        cachedAt: Date.now(),
+                      });
+                      window.history.replaceState(null, "", `/lists/${created.id}`);
                     } catch (error) {
+                      if (optimisticListId) {
+                        setCategories((current) => current.filter((category) => category.id !== optimisticListId));
+                        const fallback = categories[0];
+                        if (fallback) {
+                          switchList(fallback.id);
+                        }
+                      }
                       setMessage(error instanceof Error ? error.message : "リストを作成できませんでした。");
                     }
                   });
@@ -279,7 +628,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                   placeholder="新しいリスト"
                   onChange={(event) => setCategoryFormName(event.target.value)}
                 />
-                <button type="submit" className="primary-button compact-button" disabled={isPending}>
+                <button type="submit" className="primary-button compact-button">
                   作成
                 </button>
               </form>
@@ -292,6 +641,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
               href={`/lists/${snapshot.list.id}/settings`}
               className="settings-chip"
               aria-label={`${activeListName} の設定`}
+              onClick={cacheSettingsView}
             >
               <GearIcon />
               <span>設定</span>
@@ -342,11 +692,11 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                 startTransition(async () => {
                   try {
                     await reorderItems(snapshot.list.id, user, orderedIds);
-                    await refresh(user);
+                    await refresh(user, { useCache: false });
                     setMessage(null);
                   } catch (error) {
                     setMessage(error instanceof Error ? error.message : "並び替えできませんでした。");
-                    await refresh(user);
+                    await refresh(user, { useCache: false });
                   } finally {
                     setDraggingItemId(null);
                   }
@@ -357,9 +707,9 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                 removeItemFromView(item.id);
                 try {
                   await removeItem(snapshot.list.id, item.id, user);
-                  await refresh(user);
+                  await refresh(user, { useCache: false });
                 } catch (error) {
-                  await refresh(user);
+                  await refresh(user, { useCache: false });
                   setMessage(error instanceof Error ? error.message : "更新できませんでした。");
                 }
               }}
@@ -379,7 +729,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                           await updateItem(snapshot.list.id, item.id, user, payload, targetCategoryId);
                           setEditingItemId(null);
                           setNewCategoryName("");
-                          await refresh(user);
+                          await refresh(user, { useCache: false });
                         }
                       : undefined
               }

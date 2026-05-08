@@ -2,9 +2,9 @@ import { expect, type Page, test } from "@playwright/test";
 
 async function openGuestList(page: Page) {
   await page.goto("/");
-  await expect(page.getByText("マイリストを開いています")).toBeVisible();
   await expect(page).toHaveURL(/\/lists\/list_/, { timeout: 20_000 });
   await expect(page.getByLabel("商品名")).toBeVisible();
+  await expect(page.getByText("マイリストを開いています")).toHaveCount(0);
 }
 
 test.describe("Guest shopping list", () => {

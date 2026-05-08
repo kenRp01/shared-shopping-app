@@ -214,6 +214,7 @@ async function syncSupabaseUserToLocal(params: {
   email: string;
   name?: string | null;
   persistSession: boolean;
+  syncRemote?: boolean;
 }) {
   const db = await getDb();
   const existing = await db.get("users", params.id);
@@ -223,8 +224,14 @@ async function syncSupabaseUserToLocal(params: {
     name: params.name?.trim() || existing?.name || deriveName(params.email, params.name),
     createdAt: existing?.createdAt ?? new Date().toISOString(),
   };
-  await syncRemoteProfile(toProfile(account));
-  return upsertLocalUser(account, params.persistSession);
+  if (params.syncRemote) {
+    await syncRemoteProfile(toProfile(account));
+  }
+  const profile = await upsertLocalUser(account, params.persistSession);
+  if (params.persistSession) {
+    currentUserCache = { user: profile, cachedAt: Date.now() };
+  }
+  return profile;
 }
 
 function canView(list: ShoppingList, memberUserIds: string[], viewerId?: string | null) {
@@ -292,6 +299,30 @@ type SupabaseItemRow = {
   created_at: string;
   updated_at: string;
 };
+
+type SupabaseOverviewItemRow = Pick<
+  SupabaseItemRow,
+  "id" | "list_id" | "status" | "scope" | "due_date" | "remind_on" | "reminder_enabled" | "created_by_user_id"
+>;
+
+type SupabaseOverviewRows = {
+  lists: SupabaseListRow[];
+  members: SupabaseMemberRow[];
+  items: SupabaseOverviewItemRow[];
+  profiles: SupabaseProfileRow[];
+};
+
+type SupabaseSnapshotResponse = {
+  list: SupabaseListRow;
+  members: SupabaseMemberRow[];
+  items: SupabaseItemRow[];
+  profiles: SupabaseProfileRow[];
+  categories?: SupabaseOverviewRows;
+};
+
+const CURRENT_USER_CACHE_TTL_MS = 1000 * 60;
+let currentUserCache: { user: UserProfile | null; cachedAt: number } | null = null;
+let currentUserRequest: Promise<UserProfile | null> | null = null;
 
 function toSupabaseProfile(row: SupabaseProfileRow): UserProfile {
   return {
@@ -364,6 +395,50 @@ function toItemView(item: ShoppingItem, userMap: Map<string, UserRecord | UserPr
     dueState: formatRelativeDue(item.dueDate, todayKey()),
     reminderState: formatRelativeDue(item.remindOn ?? item.dueDate, todayKey()),
   };
+}
+
+function buildSupabaseOverviews(
+  viewerId: string,
+  listRows: SupabaseListRow[] = [],
+  memberRows: SupabaseMemberRow[] = [],
+  itemRows: SupabaseOverviewItemRow[] = [],
+  profileRows: SupabaseProfileRow[] = [],
+) {
+  const members = memberRows.map(toSupabaseMember);
+  const profiles = profileRows.map(toSupabaseProfile);
+  const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
+  const today = todayKey();
+
+  return listRows
+    .map((row, index) => toSupabaseList(row, index))
+    .filter((list) => list.ownerUserId === viewerId || members.some((member) => member.listId === list.id && member.userId === viewerId))
+    .map<ShoppingListOverview>((list) => {
+      const listMembers = members.filter((member) => member.listId === list.id);
+      const listItems = itemRows.filter(
+        (item) => item.list_id === list.id && (item.scope === "shared" || item.created_by_user_id === viewerId),
+      );
+      const memberNames = listMembers
+        .map((member) => profileMap.get(member.userId)?.name)
+        .filter((value): value is string => Boolean(value));
+      const pending = listItems.filter((item) => item.status === "pending");
+      const purchased = listItems.filter((item) => item.status === "purchased");
+      return {
+        ...list,
+        ownerName: profileMap.get(list.ownerUserId)?.name ?? "不明",
+        memberNames,
+        memberCount: listMembers.length,
+        pendingCount: pending.length,
+        purchasedCount: purchased.length,
+        dueTodayCount: pending.filter((item) => item.due_date === today).length,
+        overdueCount: pending.filter((item) => item.due_date && item.due_date < today).length,
+        reminderTodayCount: pending.filter((item) => item.reminder_enabled && (item.remind_on ?? item.due_date) === today).length,
+        viewerRole:
+          viewerId === list.ownerUserId
+            ? "owner"
+            : listMembers.find((member) => member.userId === viewerId)?.role ?? null,
+      };
+    })
+    .sort((left, right) => left.sortOrder - right.sortOrder || right.updatedAt.localeCompare(left.updatedAt));
 }
 
 async function getSupabaseAccessToken() {
@@ -458,6 +533,7 @@ export async function signInWithEmail(payload: { email: string; password: string
       email: data.user.email,
       name: typeof data.user.user_metadata?.name === "string" ? data.user.user_metadata.name : null,
       persistSession: true,
+      syncRemote: true,
     });
   }
 }
@@ -493,6 +569,7 @@ export async function signUpWithEmail(payload: { email: string; password: string
       email: data.user.email,
       name: displayName,
       persistSession: true,
+      syncRemote: true,
     });
     return { needsConfirmation: false };
   }
@@ -501,6 +578,8 @@ export async function signUpWithEmail(payload: { email: string; password: string
 }
 
 export async function signOutLocal() {
+  currentUserCache = null;
+  currentUserRequest = null;
   if (hasSupabaseEnv()) {
     const supabase = createSupabaseBrowserClient();
     await supabase?.auth.signOut();
@@ -510,6 +589,20 @@ export async function signOutLocal() {
 }
 
 export async function getCurrentUser() {
+  if (currentUserCache && Date.now() - currentUserCache.cachedAt < CURRENT_USER_CACHE_TTL_MS) {
+    return currentUserCache.user;
+  }
+  if (currentUserRequest) {
+    return currentUserRequest;
+  }
+
+  currentUserRequest = resolveCurrentUser().finally(() => {
+    currentUserRequest = null;
+  });
+  return currentUserRequest;
+}
+
+async function resolveCurrentUser() {
   if (hasSupabaseEnv()) {
     const supabase = createSupabaseBrowserClient();
     if (!supabase) {
@@ -517,8 +610,9 @@ export async function getCurrentUser() {
     }
 
     const {
-      data: { user },
-    } = await supabase.auth.getUser();
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user;
 
     if (user?.email) {
       const nameFromMeta =
@@ -528,22 +622,28 @@ export async function getCurrentUser() {
             ? user.user_metadata.full_name
             : null;
 
-      return syncSupabaseUserToLocal({
+      const profile = await syncSupabaseUserToLocal({
         id: user.id,
         email: user.email,
         name: nameFromMeta,
         persistSession: true,
+        syncRemote: false,
       });
+      currentUserCache = { user: profile, cachedAt: Date.now() };
+      return profile;
     }
   }
 
   const db = await getDb();
   const session = await db.get("session", "current");
   if (!session) {
+    currentUserCache = { user: null, cachedAt: Date.now() };
     return null;
   }
   const user = await db.get("users", session.userId);
-  return user ? toProfile(user) : null;
+  const profile = user ? toProfile(user) : null;
+  currentUserCache = { user: profile, cachedAt: Date.now() };
+  return profile;
 }
 
 export async function continueAsGuest() {
@@ -562,6 +662,7 @@ export async function continueAsGuest() {
 
   await db.put("session", { userId: guest.id }, "current");
   const profile = toProfile(guest);
+  currentUserCache = { user: profile, cachedAt: Date.now() };
   const existingLists = await listAccessibleLists(profile.id);
 
   if (existingLists.length > 0) {
@@ -598,7 +699,9 @@ export async function updateUserProfile(viewer: UserProfile, payload: { name: st
     name,
   };
   await db.put("users", nextUser);
-  return toProfile(nextUser);
+  const profile = toProfile(nextUser);
+  currentUserCache = { user: profile, cachedAt: Date.now() };
+  return profile;
 }
 
 async function listAccessibleListsFromSupabase(viewerId: string) {
@@ -610,46 +713,11 @@ async function listAccessibleListsFromSupabase(viewerId: string) {
   } = await requestJson<{
     lists: SupabaseListRow[];
     members: SupabaseMemberRow[];
-    items: SupabaseItemRow[];
+    items: SupabaseOverviewItemRow[];
     profiles: SupabaseProfileRow[];
   }>("/api/lists");
 
-  const members = ((memberRows ?? []) as SupabaseMemberRow[]).map(toSupabaseMember);
-  const profiles = ((profileRows ?? []) as SupabaseProfileRow[]).map(toSupabaseProfile);
-  const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
-  const items = ((itemRows ?? []) as SupabaseItemRow[]).map((row, index) => toSupabaseItem(row, index));
-
-  return ((listRows ?? []) as SupabaseListRow[])
-    .map((row, index) => toSupabaseList(row, index))
-    .filter((list) => list.ownerUserId === viewerId || members.some((member) => member.listId === list.id && member.userId === viewerId))
-    .map<ShoppingListOverview>((list) => {
-      const listMembers = members.filter((member) => member.listId === list.id);
-      const listItems = items.filter(
-        (item) => item.listId === list.id && (item.scope === "shared" || item.createdByUserId === viewerId),
-      );
-      const memberNames = listMembers
-        .map((member) => profileMap.get(member.userId)?.name)
-        .filter((value): value is string => Boolean(value));
-      const pending = listItems.filter((item) => item.status === "pending");
-      const purchased = listItems.filter((item) => item.status === "purchased");
-      const today = todayKey();
-      return {
-        ...list,
-        ownerName: profileMap.get(list.ownerUserId)?.name ?? "不明",
-        memberNames,
-        memberCount: listMembers.length,
-        pendingCount: pending.length,
-        purchasedCount: purchased.length,
-        dueTodayCount: pending.filter((item) => item.dueDate === today).length,
-        overdueCount: pending.filter((item) => item.dueDate && item.dueDate < today).length,
-        reminderTodayCount: pending.filter((item) => item.reminderEnabled && (item.remindOn ?? item.dueDate) === today).length,
-        viewerRole:
-          viewerId === list.ownerUserId
-            ? "owner"
-            : listMembers.find((member) => member.userId === viewerId)?.role ?? null,
-      };
-    })
-    .sort((left, right) => left.sortOrder - right.sortOrder || right.updatedAt.localeCompare(left.updatedAt));
+  return buildSupabaseOverviews(viewerId, listRows ?? [], memberRows ?? [], itemRows ?? [], profileRows ?? []);
 }
 
 export async function listAccessibleLists(viewerId: string) {
@@ -787,58 +855,12 @@ export async function reorderLists(viewer: UserProfile, orderedListIds: string[]
 
 export async function getListSnapshot(listId: string, viewerId?: string | null): Promise<ShoppingListSnapshot | null> {
   if (hasSupabaseEnv() && viewerId !== GUEST_USER_ID) {
-    const response = await requestJson<{
-      list: SupabaseListRow;
-      members: SupabaseMemberRow[];
-      items: SupabaseItemRow[];
-      profiles: SupabaseProfileRow[];
-    }>(`/api/lists/${listId}`).catch(() => null);
+    const response = await requestJson<SupabaseSnapshotResponse>(`/api/lists/${listId}`).catch(() => null);
     if (!response?.list) {
       return null;
     }
 
-    const list = toSupabaseList(response.list);
-    const members = ((response.members ?? []) as SupabaseMemberRow[]).map(toSupabaseMember);
-    const memberIds = members.map((member) => member.userId);
-    if (!canView(list, memberIds, viewerId)) {
-      return null;
-    }
-
-    const profiles = ((response.profiles ?? []) as SupabaseProfileRow[]).map(toSupabaseProfile);
-    const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
-    const owner = profileMap.get(list.ownerUserId) ?? {
-      id: list.ownerUserId,
-      email: "",
-      name: "所有者",
-      createdAt: list.createdAt,
-    };
-
-    const items = ((response.items ?? []) as SupabaseItemRow[])
-      .map((row, index) => toSupabaseItem(row, index))
-      .filter((item) => {
-        if (item.scope === "shared") {
-          return true;
-        }
-        if (!viewerId) {
-          return false;
-        }
-        return item.createdByUserId === viewerId;
-      })
-      .map((item) => toItemView(item, profileMap))
-      .sort((left, right) => left.status.localeCompare(right.status) || left.sortOrder - right.sortOrder || left.createdAt.localeCompare(right.createdAt));
-
-    return {
-      list,
-      owner,
-      members: members
-        .map((member) => {
-          const profile = profileMap.get(member.userId);
-          return profile ? { ...profile, role: member.role } : null;
-        })
-        .filter((value): value is UserProfile & { role: "owner" | "editor" } => Boolean(value)),
-      items,
-      permission: canEdit(list, memberIds, viewerId) ? "edit" : "view",
-    };
+    return buildSupabaseSnapshot(response, viewerId);
   }
 
   const db = await getDb();
@@ -907,6 +929,104 @@ export async function getListSnapshot(listId: string, viewerId?: string | null):
   };
 }
 
+function buildSupabaseSnapshot(response: SupabaseSnapshotResponse, viewerId?: string | null): ShoppingListSnapshot | null {
+  const list = toSupabaseList(response.list);
+  const members = ((response.members ?? []) as SupabaseMemberRow[]).map(toSupabaseMember);
+  const memberIds = members.map((member) => member.userId);
+  if (!canView(list, memberIds, viewerId)) {
+    return null;
+  }
+
+  const profiles = ((response.profiles ?? []) as SupabaseProfileRow[]).map(toSupabaseProfile);
+  const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
+  const owner = profileMap.get(list.ownerUserId) ?? {
+    id: list.ownerUserId,
+    email: "",
+    name: "所有者",
+    createdAt: list.createdAt,
+  };
+
+  const items = ((response.items ?? []) as SupabaseItemRow[])
+    .map((row, index) => toSupabaseItem(row, index))
+    .filter((item) => {
+      if (item.scope === "shared") {
+        return true;
+      }
+      if (!viewerId) {
+        return false;
+      }
+      return item.createdByUserId === viewerId;
+    })
+    .map((item) => toItemView(item, profileMap))
+    .sort((left, right) => left.status.localeCompare(right.status) || left.sortOrder - right.sortOrder || left.createdAt.localeCompare(right.createdAt));
+
+  return {
+    list,
+    owner,
+    members: members
+      .map((member) => {
+        const profile = profileMap.get(member.userId);
+        return profile ? { ...profile, role: member.role } : null;
+      })
+      .filter((value): value is UserProfile & { role: "owner" | "editor" } => Boolean(value)),
+    items,
+    permission: canEdit(list, memberIds, viewerId) ? "edit" : "view",
+  };
+}
+
+export async function getListSnapshotBundle(
+  listId: string,
+  viewerId?: string | null,
+): Promise<{ snapshot: ShoppingListSnapshot | null; categories: ShoppingListOverview[] | null }> {
+  if (hasSupabaseEnv() && viewerId !== GUEST_USER_ID) {
+    const response = await requestJson<SupabaseSnapshotResponse>(`/api/lists/${listId}`).catch(() => null);
+    if (!response?.list) {
+      return { snapshot: null, categories: null };
+    }
+    return {
+      snapshot: buildSupabaseSnapshot(response, viewerId),
+      categories: response.categories
+        ? buildSupabaseOverviews(viewerId ?? "", response.categories.lists, response.categories.members, response.categories.items, response.categories.profiles)
+        : null,
+    };
+  }
+
+  const [snapshot, categories] = await Promise.all([getListSnapshot(listId, viewerId), viewerId ? listAccessibleLists(viewerId) : Promise.resolve([])]);
+  return { snapshot, categories };
+}
+
+export async function getInitialListSnapshotBundle(
+  viewerId: string,
+): Promise<{ snapshot: ShoppingListSnapshot | null; categories: ShoppingListOverview[] }> {
+  if (hasSupabaseEnv() && viewerId !== GUEST_USER_ID) {
+    const response = await requestJson<SupabaseSnapshotResponse>(`/api/lists/initial`).catch(() => null);
+    if (!response?.list) {
+      return {
+        snapshot: null,
+        categories: response?.categories
+          ? buildSupabaseOverviews(viewerId, response.categories.lists, response.categories.members, response.categories.items, response.categories.profiles)
+          : [],
+      };
+    }
+
+    return {
+      snapshot: buildSupabaseSnapshot(response, viewerId),
+      categories: response.categories
+        ? buildSupabaseOverviews(viewerId, response.categories.lists, response.categories.members, response.categories.items, response.categories.profiles)
+        : [],
+    };
+  }
+
+  const categories = await listAccessibleLists(viewerId);
+  if (!categories.length) {
+    return { snapshot: null, categories };
+  }
+  return {
+    snapshot: await getListSnapshot(categories[0].id, viewerId),
+    categories,
+  };
+}
+
 export async function getPublicSnapshot(token: string) {
   if (hasSupabaseEnv()) {
     const supabase = createSupabaseBrowserClient();
@@ -915,11 +1035,41 @@ export async function getPublicSnapshot(token: string) {
     }
     const { data: listRow } = await supabase
       .from("shopping_lists")
-      .select("id")
+      .select("*")
       .eq("public_token", token)
       .eq("visibility", "public_link")
       .single();
-    return listRow?.id ? getListSnapshot(listRow.id, null) : null;
+    if (!listRow?.id) {
+      return null;
+    }
+
+    const [{ data: memberRows }, { data: itemRows }] = await Promise.all([
+      supabase.from("shopping_list_members").select("*").eq("list_id", listRow.id),
+      supabase.from("shopping_items").select("*").eq("list_id", listRow.id).eq("scope", "shared"),
+    ]);
+
+    const profileIds = [
+      ...new Set([
+        listRow.owner_user_id,
+        ...((memberRows ?? []) as SupabaseMemberRow[]).map((member) => member.user_id),
+        ...((itemRows ?? []) as SupabaseItemRow[])
+          .flatMap((item) => [item.created_by_user_id, item.updated_by_user_id, item.purchased_by_user_id])
+          .filter((value): value is string => Boolean(value)),
+      ]),
+    ];
+    const { data: profileRows } = profileIds.length
+      ? await supabase.from("profiles").select("*").in("id", profileIds)
+      : { data: [] };
+
+    return buildSupabaseSnapshot(
+      {
+        list: listRow as SupabaseListRow,
+        members: (memberRows ?? []) as SupabaseMemberRow[],
+        items: (itemRows ?? []) as SupabaseItemRow[],
+        profiles: (profileRows ?? []) as SupabaseProfileRow[],
+      },
+      null,
+    );
   }
 
   const db = await getDb();
@@ -937,17 +1087,17 @@ export async function createItem(listId: string, viewer: UserProfile, payload: C
     throw new Error("商品名や期限の入力を確認してください。");
   }
 
-  const snapshot = await getListSnapshot(listId, viewer.id);
-  if (!snapshot || snapshot.permission !== "edit") {
-    throw new Error("このリストを編集する権限がありません。");
-  }
-
   if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
     const { item } = await requestJson<{ item: SupabaseItemRow }>(`/api/lists/${listId}/items`, {
       method: "POST",
       body: JSON.stringify(result.data),
     });
     return toSupabaseItem(item);
+  }
+
+  const snapshot = await getListSnapshot(listId, viewer.id);
+  if (!snapshot || snapshot.permission !== "edit") {
+    throw new Error("このリストを編集する権限がありません。");
   }
 
   const db = await getDb();
@@ -1135,18 +1285,16 @@ export async function removeItem(listId: string, itemId: string, viewer: UserPro
 }
 
 export async function removeList(listId: string, viewer: UserProfile) {
+  if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
+    await requestJson(`/api/lists/${listId}`, {
+      method: "DELETE",
+    });
+    return;
+  }
+
   const snapshot = await getListSnapshot(listId, viewer.id);
   if (!snapshot || snapshot.owner.id !== viewer.id) {
     throw new Error("リストを削除できるのは所有者だけです。");
-  }
-
-  if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase!.from("shopping_lists").delete().eq("id", listId);
-    if (error) {
-      throw new Error(error.message);
-    }
-    return;
   }
 
   const db = await getDb();

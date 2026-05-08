@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_LIST_FORM } from "@/lib/constants";
-import { continueAsGuest, createList, getCurrentUser, listAccessibleLists } from "@/lib/local-store";
+import { continueAsGuest, createList, getCurrentUser, getInitialListSnapshotBundle } from "@/lib/local-store";
 
 export default function HomePage() {
   const router = useRouter();
@@ -28,13 +28,22 @@ export default function HomePage() {
           return;
         }
 
-        const lists = await listAccessibleLists(user.id);
+        const initial = await getInitialListSnapshotBundle(user.id);
         if (!active) {
           return;
         }
 
-        if (lists.length > 0) {
-          router.replace(`/lists/${lists[0].id}`);
+        if (initial.snapshot) {
+          sessionStorage.setItem(
+            "shareshopi:initial-list",
+            JSON.stringify({
+              user,
+              snapshot: initial.snapshot,
+              categories: initial.categories,
+              cachedAt: Date.now(),
+            }),
+          );
+          router.replace(`/lists/${initial.snapshot.list.id}`);
           return;
         }
 
@@ -65,11 +74,7 @@ export default function HomePage() {
   if (!error) {
     return (
       <div className="page-grid redirect-shell">
-        <section className="panel landing-hero landing-hero-compact">
-          <p className="eyebrow">ShareShopi</p>
-          <h2>マイリストを開いています</h2>
-          <p className="muted-text">少しだけお待ちください</p>
-        </section>
+        <section className="panel landing-hero landing-hero-compact" aria-busy="true" />
       </div>
     );
   }

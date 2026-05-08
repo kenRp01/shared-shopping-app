@@ -29,40 +29,65 @@ export async function GET(request: NextRequest) {
     return error;
   }
 
-  const [{ data: listRows, error: listError }, { data: memberRows, error: memberError }, { data: itemRows, error: itemError }] =
-    await Promise.all([
-      admin.from("shopping_lists").select("*").order("updated_at", { ascending: false }),
-      admin.from("shopping_list_members").select("*"),
-      admin.from("shopping_items").select("*"),
-    ]);
+  const [{ data: ownedListRows, error: ownedListError }, { data: viewerMemberRows, error: viewerMemberError }] = await Promise.all([
+    admin.from("shopping_lists").select("*").eq("owner_user_id", viewer!.id),
+    admin.from("shopping_list_members").select("*").eq("user_id", viewer!.id),
+  ]);
 
-  if (listError || memberError || itemError) {
+  if (ownedListError || viewerMemberError) {
     return NextResponse.json(
-      { error: listError?.message || memberError?.message || itemError?.message || "リストを取得できませんでした。" },
+      { error: ownedListError?.message || viewerMemberError?.message || "リストを取得できませんでした。" },
       { status: 500 },
     );
   }
 
-  const members = memberRows ?? [];
-  const lists = (listRows ?? []).filter(
-    (list) => list.owner_user_id === viewer!.id || members.some((member) => member.list_id === list.id && member.user_id === viewer!.id),
-  );
-  const listIds = new Set(lists.map((list) => list.id));
-  const visibleMembers = members.filter((member) => listIds.has(member.list_id));
-  const visibleItems = (itemRows ?? []).filter((item) => listIds.has(item.list_id));
+  const memberListIds = [...new Set((viewerMemberRows ?? []).map((member) => member.list_id))];
+  const { data: memberListRows, error: memberListError } = memberListIds.length
+    ? await admin.from("shopping_lists").select("*").in("id", memberListIds)
+    : { data: [], error: null };
+
+  if (memberListError) {
+    return NextResponse.json({ error: memberListError.message }, { status: 500 });
+  }
+
+  const listMap = new Map<string, NonNullable<typeof ownedListRows>[number]>();
+  for (const list of ownedListRows ?? []) {
+    listMap.set(list.id, list);
+  }
+  for (const list of memberListRows ?? []) {
+    listMap.set(list.id, list);
+  }
+
+  const lists = [...listMap.values()].sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+  const listIds = lists.map((list) => list.id);
+  const [membersResult, itemsResult] = listIds.length
+    ? await Promise.all([
+        admin.from("shopping_list_members").select("*").in("list_id", listIds),
+        admin
+          .from("shopping_items")
+          .select("id,list_id,status,scope,due_date,remind_on,reminder_enabled,created_by_user_id")
+          .in("list_id", listIds),
+      ])
+    : [
+        { data: [], error: null },
+        { data: [], error: null },
+      ];
+
+  if (membersResult.error || itemsResult.error) {
+    return NextResponse.json(
+      { error: membersResult.error?.message || itemsResult.error?.message || "リストを取得できませんでした。" },
+      { status: 500 },
+    );
+  }
+
+  const visibleMembers = membersResult.data ?? [];
+  const visibleItems = itemsResult.data ?? [];
   const profileIds = new Set<string>();
   for (const list of lists) {
     profileIds.add(list.owner_user_id);
   }
   for (const member of visibleMembers) {
     profileIds.add(member.user_id);
-  }
-  for (const item of visibleItems) {
-    profileIds.add(item.created_by_user_id);
-    profileIds.add(item.updated_by_user_id);
-    if (item.purchased_by_user_id) {
-      profileIds.add(item.purchased_by_user_id);
-    }
   }
 
   const { data: profiles, error: profileError } = profileIds.size
