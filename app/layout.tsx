@@ -1,19 +1,8 @@
 import type { Metadata } from "next";
-import { M_PLUS_Rounded_1c, Noto_Sans_JP } from "next/font/google";
 import Link from "next/link";
+import { ChunkReloadGuard } from "@/components/chunk-reload-guard";
 import { Nav } from "@/components/nav";
 import "./globals.css";
-
-const display = M_PLUS_Rounded_1c({
-  subsets: ["latin"],
-  variable: "--font-display",
-  weight: ["500", "700", "800"],
-});
-
-const body = Noto_Sans_JP({
-  subsets: ["latin"],
-  variable: "--font-body",
-});
 
 export const metadata: Metadata = {
   title: "ShareShopi",
@@ -23,7 +12,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ja">
-      <body className={`${display.variable} ${body.variable}`}>
+      <body>
+        <ChunkReloadGuard />
         <div className="page-shell">
           <Nav />
           <main>{children}</main>

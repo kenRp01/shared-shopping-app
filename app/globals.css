@@ -12,6 +12,8 @@
   --line: #dce4d8;
   --shadow: 0 12px 28px rgba(28, 45, 38, 0.07);
   --shadow-soft: 0 8px 20px rgba(28, 45, 38, 0.05);
+  --font-display: "Hiragino Maru Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+  --font-body: "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
 }
 
 * {
@@ -282,6 +284,49 @@ main {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.support-card a {
+  display: grid;
+  gap: 2px;
+}
+
+.support-card small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.contact-form {
+  display: grid;
+  gap: 12px;
+}
+
+.contact-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.contact-form span {
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+
+.contact-form textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+
+.contact-submit {
+  width: 100%;
+}
+
+.success-inline {
+  margin: 0;
+  color: var(--accent);
+  font-weight: 800;
 }
 
 .panel,
@@ -926,6 +971,10 @@ main {
 .quick-add-panel {
   background: linear-gradient(180deg, rgba(222, 244, 232, 0.88), rgba(255, 254, 251, 0.92));
   border-color: rgba(37, 116, 90, 0.16);
+  position: sticky;
+  top: 104px;
+  z-index: 9;
+  backdrop-filter: blur(18px);
 }
 
 .quick-add-form {
@@ -1054,6 +1103,20 @@ main {
   margin-bottom: 14px;
 }
 
+.category-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.category-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
 .category-strip {
   display: flex;
   gap: 10px;
@@ -1122,6 +1185,12 @@ main {
   box-shadow: var(--shadow-soft);
 }
 
+.category-add-button:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
 .category-add-button svg,
 .settings-chip svg {
   width: 18px;
@@ -1164,6 +1233,23 @@ main {
   gap: 8px;
   font-weight: 700;
   box-shadow: var(--shadow-soft);
+}
+
+.settings-chip-icon {
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  justify-content: center;
+  background: rgba(255, 254, 251, 0.94);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.settings-chip-icon:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(37, 116, 90, 0.2);
 }
 
 .item-row-modern {
@@ -1422,6 +1508,10 @@ code {
     gap: 8px;
   }
 
+  .quick-add-panel {
+    top: 78px;
+  }
+
   .quick-add-submit {
     padding-inline: 10px;
   }
@@ -1430,14 +1520,35 @@ code {
     margin-bottom: 10px;
   }
 
+  .category-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .category-actions {
+    gap: 6px;
+  }
+
   .category-pill {
     min-height: 36px;
     padding-inline: 14px;
   }
 
+  .category-add-button {
+    width: 38px;
+    height: 38px;
+  }
+
   .settings-chip {
     min-height: 38px;
     align-self: flex-end;
+  }
+
+  .settings-chip-icon {
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
+    align-self: center;
   }
 
   .quick-add-title .input-with-action {

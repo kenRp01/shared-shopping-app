@@ -487,75 +487,91 @@ export function ListDetailClient({ listId, publicToken }: Props) {
       <section className={cn("panel list-section-panel", isResolvingList && "list-section-panel-loading")}>
         {categories.length ? (
           <div className="category-strip-wrap">
-            <div className="category-strip" aria-label="カテゴリー切り替え">
-            {categories.map((category) => (
-              <div
-                key={category.id}
-                className={cn(
-                  "category-pill-holder",
-                  draggingCategoryId === category.id && "category-pill-holder-dragging",
-                )}
-                draggable={Boolean(user) && !publicToken}
-                onDragStart={() => setDraggingCategoryId(category.id)}
-                onDragEnd={() => setDraggingCategoryId(null)}
-                onDragOver={(event) => event.preventDefault()}
-                onDragEnter={() => {
-                  if (!draggingCategoryId || draggingCategoryId === category.id || !user) {
-                    return;
-                  }
-                  setCategories((current) => {
-                    const next = [...current];
-                    const from = next.findIndex((entry) => entry.id === draggingCategoryId);
-                    const to = next.findIndex((entry) => entry.id === category.id);
-                    if (from < 0 || to < 0 || from === to) {
-                      return current;
-                    }
-                    const [moved] = next.splice(from, 1);
-                    next.splice(to, 0, moved);
-                    return next;
-                  });
-                }}
-                onDrop={(event: DragEvent<HTMLDivElement>) => {
-                  event.preventDefault();
-                  if (!user) {
-                    return;
-                  }
-                  const orderedIds = categories.map((entry) => entry.id);
-                  startTransition(async () => {
-                    try {
-                      await reorderLists(user, orderedIds);
-                      await refresh(user, { useCache: false });
-                    } catch (error) {
-                      setMessage(error instanceof Error ? error.message : "並び替えできませんでした。");
-                      await refresh(user, { useCache: false });
-                    } finally {
-                      setDraggingCategoryId(null);
-                    }
-                  });
-                }}
-              >
-                <Link
-                  href={`/lists/${category.id}`}
-                  className={cn("category-pill", category.id === activeCategoryId && "category-pill-active")}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    switchList(category.id);
-                  }}
-                >
-                  {category.name}
-                </Link>
+            <div className="category-toolbar">
+              <div className="category-strip" aria-label="カテゴリー切り替え">
+                {categories.map((category) => (
+                  <div
+                    key={category.id}
+                    className={cn(
+                      "category-pill-holder",
+                      draggingCategoryId === category.id && "category-pill-holder-dragging",
+                    )}
+                    draggable={Boolean(user) && !publicToken}
+                    onDragStart={() => setDraggingCategoryId(category.id)}
+                    onDragEnd={() => setDraggingCategoryId(null)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDragEnter={() => {
+                      if (!draggingCategoryId || draggingCategoryId === category.id || !user) {
+                        return;
+                      }
+                      setCategories((current) => {
+                        const next = [...current];
+                        const from = next.findIndex((entry) => entry.id === draggingCategoryId);
+                        const to = next.findIndex((entry) => entry.id === category.id);
+                        if (from < 0 || to < 0 || from === to) {
+                          return current;
+                        }
+                        const [moved] = next.splice(from, 1);
+                        next.splice(to, 0, moved);
+                        return next;
+                      });
+                    }}
+                    onDrop={(event: DragEvent<HTMLDivElement>) => {
+                      event.preventDefault();
+                      if (!user) {
+                        return;
+                      }
+                      const orderedIds = categories.map((entry) => entry.id);
+                      startTransition(async () => {
+                        try {
+                          await reorderLists(user, orderedIds);
+                          await refresh(user, { useCache: false });
+                        } catch (error) {
+                          setMessage(error instanceof Error ? error.message : "並び替えできませんでした。");
+                          await refresh(user, { useCache: false });
+                        } finally {
+                          setDraggingCategoryId(null);
+                        }
+                      });
+                    }}
+                  >
+                    <Link
+                      href={`/lists/${category.id}`}
+                      className={cn("category-pill", category.id === activeCategoryId && "category-pill-active")}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        switchList(category.id);
+                      }}
+                    >
+                      {category.name}
+                    </Link>
+                  </div>
+                ))}
               </div>
-            ))}
-            {snapshot.permission === "edit" && !publicToken ? (
-              <button
-                type="button"
-                className="category-add-button"
-                onClick={() => setShowCategoryCreate((current) => !current)}
-                aria-label="新しいリストを作成"
-              >
-                <PlusIcon />
-              </button>
-            ) : null}
+              {!publicToken ? (
+                <div className="category-actions">
+                  {snapshot.permission === "edit" ? (
+                    <button
+                      type="button"
+                      className="category-add-button"
+                      onClick={() => setShowCategoryCreate((current) => !current)}
+                      aria-label="新しいリストを作成"
+                      title="新しいリスト"
+                    >
+                      <PlusIcon />
+                    </button>
+                  ) : null}
+                  <Link
+                    href={`/lists/${snapshot.list.id}/settings`}
+                    className="settings-chip settings-chip-icon"
+                    aria-label={`${activeListName} の設定`}
+                    title="設定"
+                    onClick={cacheSettingsView}
+                  >
+                    <GearIcon />
+                  </Link>
+                </div>
+              ) : null}
             </div>
             {showCategoryCreate && snapshot.permission === "edit" && !publicToken ? (
               <form
@@ -635,19 +651,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
             ) : null}
           </div>
         ) : null}
-        <div className="detail-inline-head detail-inline-head-compact">
-          {publicToken ? null : (
-            <Link
-              href={`/lists/${snapshot.list.id}/settings`}
-              className="settings-chip"
-              aria-label={`${activeListName} の設定`}
-              onClick={cacheSettingsView}
-            >
-              <GearIcon />
-              <span>設定</span>
-            </Link>
-          )}
-        </div>
         <div className="item-list item-list-stack">
           {pendingItems.length === 0 ? <p className="empty-state">なし</p> : null}
           {pendingItems.map((item) => (
