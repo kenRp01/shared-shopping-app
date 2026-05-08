@@ -10,7 +10,21 @@ export function Nav() {
   const [user, setUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
-    getCurrentUser().then(setUser);
+    const loadUser = () => {
+      getCurrentUser().then(setUser);
+    };
+    const idleId =
+      typeof window.requestIdleCallback === "function"
+        ? window.requestIdleCallback(loadUser, { timeout: 1200 })
+        : globalThis.setTimeout(loadUser, 250);
+
+    return () => {
+      if (typeof window.cancelIdleCallback === "function" && typeof idleId === "number") {
+        window.cancelIdleCallback(idleId);
+      } else {
+        globalThis.clearTimeout(idleId);
+      }
+    };
   }, []);
 
   return (

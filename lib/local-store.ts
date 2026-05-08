@@ -1,6 +1,6 @@
 "use client";
 
-import { openDB, type DBSchema } from "idb";
+import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { DEFAULT_ITEM_FORM, DEFAULT_LIST_FORM } from "@/lib/constants";
 import { buildReminderDigest } from "@/lib/reminders";
 import { createSupabaseBrowserClient, hasSupabaseEnv } from "@/lib/supabase-browser";
@@ -62,6 +62,8 @@ interface ShoppingDb extends DBSchema {
 const DB_NAME = "shareshopi-board";
 const DB_VERSION = 2;
 const GUEST_USER_ID = "guest_local_user";
+let dbPromise: Promise<IDBPDatabase<ShoppingDb>> | null = null;
+let dbMaintenancePromise: Promise<void> | null = null;
 
 async function ensureListOrdering(db: Awaited<ReturnType<typeof openDB<ShoppingDb>>>) {
   const lists = await db.getAll("lists");
@@ -116,7 +118,7 @@ async function ensureItemOrdering(db: Awaited<ReturnType<typeof openDB<ShoppingD
 }
 
 async function getDb() {
-  const db = await openDB<ShoppingDb>(DB_NAME, DB_VERSION, {
+  dbPromise ??= openDB<ShoppingDb>(DB_NAME, DB_VERSION, {
     upgrade(database, oldVersion, _newVersion, transaction) {
       if (oldVersion < 1) {
         database.createObjectStore("users", { keyPath: "id" });
@@ -135,9 +137,17 @@ async function getDb() {
       }
     },
   });
-  await migrateLegacyDemoData(db);
-  await ensureListOrdering(db);
-  await ensureItemOrdering(db);
+
+  const db = await dbPromise;
+  dbMaintenancePromise ??= (async () => {
+    await migrateLegacyDemoData(db);
+    await ensureListOrdering(db);
+    await ensureItemOrdering(db);
+  })().catch((error) => {
+    dbMaintenancePromise = null;
+    throw error;
+  });
+  await dbMaintenancePromise;
   return db;
 }
 
@@ -720,19 +730,14 @@ async function listAccessibleListsFromSupabase(viewerId: string) {
   return buildSupabaseOverviews(viewerId, listRows ?? [], memberRows ?? [], itemRows ?? [], profileRows ?? []);
 }
 
-export async function listAccessibleLists(viewerId: string) {
-  if (hasSupabaseEnv() && viewerId !== GUEST_USER_ID) {
-    return listAccessibleListsFromSupabase(viewerId);
-  }
-
-  const db = await getDb();
-  const [lists, members, users, items] = await Promise.all([
-    db.getAll("lists"),
-    db.getAll("members"),
-    db.getAll("users"),
-    db.getAll("items"),
-  ]);
-
+function buildLocalOverviews(
+  viewerId: string,
+  lists: ShoppingList[],
+  members: ShoppingListMember[],
+  users: UserRecord[],
+  items: ShoppingItem[],
+) {
+  const today = todayKey();
   return lists
     .filter((list) => {
       const listMembers = members.filter((member) => member.listId === list.id).map((member) => member.userId);
@@ -749,7 +754,6 @@ export async function listAccessibleLists(viewerId: string) {
         .filter((value): value is string => Boolean(value));
       const pending = listItems.filter((item) => item.status === "pending");
       const purchased = listItems.filter((item) => item.status === "purchased");
-      const today = todayKey();
       return {
         ...list,
         ownerName: owner?.name ?? "不明",
@@ -767,6 +771,80 @@ export async function listAccessibleLists(viewerId: string) {
       };
     })
     .sort((left, right) => left.sortOrder - right.sortOrder || right.updatedAt.localeCompare(left.updatedAt));
+}
+
+function buildLocalSnapshotFromData(
+  listId: string,
+  viewerId: string | null | undefined,
+  lists: ShoppingList[],
+  members: ShoppingListMember[],
+  users: UserRecord[],
+  items: ShoppingItem[],
+): ShoppingListSnapshot | null {
+  const list = lists.find((entry) => entry.id === listId);
+  if (!list) {
+    return null;
+  }
+
+  const listMembers = members.filter((member) => member.listId === list.id);
+  const memberIds = listMembers.map((member) => member.userId);
+  if (!canView(list, memberIds, viewerId)) {
+    return null;
+  }
+
+  const viewer = viewerId ? users.find((user) => user.id === viewerId) : null;
+  const owner = users.find((user) => user.id === list.ownerUserId) ?? viewer;
+  if (!owner) {
+    return null;
+  }
+
+  const userMap = new Map(users.map((user) => [user.id, user]));
+  const itemViews = items
+    .filter((item) => {
+      if (item.listId !== list.id) {
+        return false;
+      }
+      if (item.scope === "shared") {
+        return true;
+      }
+      return Boolean(viewerId && item.createdByUserId === viewerId);
+    })
+    .map((item) => toItemView(item, userMap))
+    .sort((left, right) => left.status.localeCompare(right.status) || left.sortOrder - right.sortOrder || left.createdAt.localeCompare(right.createdAt));
+
+  return {
+    list,
+    owner: toProfile(owner),
+    members: listMembers
+      .map((member) => {
+        const user = userMap.get(member.userId);
+        return user
+          ? {
+              ...toProfile(user),
+              role: member.role,
+            }
+          : null;
+      })
+      .filter((value): value is UserProfile & { role: "owner" | "editor" } => Boolean(value)),
+    items: itemViews,
+    permission: canEdit(list, memberIds, viewerId) ? "edit" : "view",
+  };
+}
+
+export async function listAccessibleLists(viewerId: string) {
+  if (hasSupabaseEnv() && viewerId !== GUEST_USER_ID) {
+    return listAccessibleListsFromSupabase(viewerId);
+  }
+
+  const db = await getDb();
+  const [lists, members, users, items] = await Promise.all([
+    db.getAll("lists"),
+    db.getAll("members"),
+    db.getAll("users"),
+    db.getAll("items"),
+  ]);
+
+  return buildLocalOverviews(viewerId, lists, members, users, items);
 }
 
 export async function createList(viewer: UserProfile, payload: CreateListPayload) {
@@ -864,69 +942,14 @@ export async function getListSnapshot(listId: string, viewerId?: string | null):
   }
 
   const db = await getDb();
-  const list = await db.get("lists", listId);
-  if (!list) {
-    return null;
-  }
-  const [members, users, items] = await Promise.all([db.getAll("members"), db.getAll("users"), db.getAll("items")]);
-  const listMembers = members.filter((member) => member.listId === list.id);
-  const memberIds = listMembers.map((member) => member.userId);
-  if (!canView(list, memberIds, viewerId)) {
-    return null;
-  }
+  const [lists, members, users, items] = await Promise.all([
+    db.getAll("lists"),
+    db.getAll("members"),
+    db.getAll("users"),
+    db.getAll("items"),
+  ]);
 
-  const viewer = viewerId ? users.find((user) => user.id === viewerId) : null;
-  const owner = users.find((user) => user.id === list.ownerUserId) ?? viewer;
-  if (!owner) {
-    return null;
-  }
-
-  const userMap = new Map(users.map((user) => [user.id, user]));
-  const itemViews: ShoppingItemView[] = items
-    .filter((item) => {
-      if (item.listId !== list.id) {
-        return false;
-      }
-      if (item.scope === "shared") {
-        return true;
-      }
-      if (!viewerId) {
-        return false;
-      }
-      return item.createdByUserId === viewerId;
-    })
-    .map((item) => {
-      const createdBy = userMap.get(item.createdByUserId);
-      const updatedBy = userMap.get(item.updatedByUserId);
-      const purchasedBy = item.purchasedByUserId ? userMap.get(item.purchasedByUserId) : null;
-      return {
-        ...item,
-        createdByName: createdBy?.name ?? "不明",
-        updatedByName: updatedBy?.name ?? "不明",
-        purchasedByName: purchasedBy?.name ?? null,
-        dueState: formatRelativeDue(item.dueDate, todayKey()),
-        reminderState: formatRelativeDue(item.remindOn ?? item.dueDate, todayKey()),
-      };
-    })
-    .sort((left, right) => left.status.localeCompare(right.status) || left.sortOrder - right.sortOrder || left.createdAt.localeCompare(right.createdAt));
-
-  return {
-    list,
-    owner: toProfile(owner),
-    members: listMembers
-      .map((member) => {
-        const user = userMap.get(member.userId);
-        return user
-          ? {
-              ...toProfile(user),
-              role: member.role,
-            }
-          : null;
-      })
-      .filter((value): value is UserProfile & { role: "owner" | "editor" } => Boolean(value)),
-    items: itemViews,
-    permission: canEdit(list, memberIds, viewerId) ? "edit" : "view",
-  };
+  return buildLocalSnapshotFromData(listId, viewerId, lists, members, users, items);
 }
 
 function buildSupabaseSnapshot(response: SupabaseSnapshotResponse, viewerId?: string | null): ShoppingListSnapshot | null {
@@ -991,8 +1014,25 @@ export async function getListSnapshotBundle(
     };
   }
 
-  const [snapshot, categories] = await Promise.all([getListSnapshot(listId, viewerId), viewerId ? listAccessibleLists(viewerId) : Promise.resolve([])]);
+  const db = await getDb();
+  const [lists, members, users, items] = await Promise.all([
+    db.getAll("lists"),
+    db.getAll("members"),
+    db.getAll("users"),
+    db.getAll("items"),
+  ]);
+  const snapshot = buildLocalSnapshotFromData(listId, viewerId, lists, members, users, items);
+  const categories = viewerId ? buildLocalOverviews(viewerId, lists, members, users, items) : [];
   return { snapshot, categories };
+}
+
+export async function getListSettingsSnapshot(listId: string, viewerId?: string | null): Promise<ShoppingListSnapshot | null> {
+  if (hasSupabaseEnv() && viewerId !== GUEST_USER_ID) {
+    const response = await requestJson<SupabaseSnapshotResponse>(`/api/lists/${listId}?view=settings`).catch(() => null);
+    return response?.list ? buildSupabaseSnapshot(response, viewerId) : null;
+  }
+
+  return getListSnapshot(listId, viewerId);
 }
 
 export async function getInitialListSnapshotBundle(
@@ -1328,10 +1368,6 @@ export async function addListMember(listId: string, email: string, viewer: UserP
   if (!result.success) {
     throw new Error("共有先のメールアドレスを確認してください。");
   }
-  const snapshot = await getListSnapshot(listId, viewer.id);
-  if (!snapshot || snapshot.permission !== "edit") {
-    throw new Error("共有設定を変更する権限がありません。");
-  }
 
   if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
     await requestJson(`/api/lists/${listId}/members`, {
@@ -1339,6 +1375,11 @@ export async function addListMember(listId: string, email: string, viewer: UserP
       body: JSON.stringify({ email: result.data.email }),
     });
     return;
+  }
+
+  const snapshot = await getListSnapshot(listId, viewer.id);
+  if (!snapshot || snapshot.permission !== "edit") {
+    throw new Error("共有設定を変更する権限がありません。");
   }
 
   const db = await getDb();
@@ -1370,20 +1411,17 @@ export async function updateListSettings(listId: string, viewer: UserProfile, pa
     throw new Error("通知設定を確認してください。");
   }
 
-  const snapshot = await getListSnapshot(listId, viewer.id);
-  if (!snapshot || snapshot.permission !== "edit") {
-    throw new Error("設定を更新する権限がありません。");
-  }
-
   if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
-    if (snapshot.owner.id !== viewer.id) {
-      throw new Error("共有設定を変更できるのは所有者だけです。");
-    }
     await requestJson(`/api/lists/${listId}`, {
       method: "PATCH",
       body: JSON.stringify(result.data),
     });
     return;
+  }
+
+  const snapshot = await getListSnapshot(listId, viewer.id);
+  if (!snapshot || snapshot.permission !== "edit") {
+    throw new Error("設定を更新する権限がありません。");
   }
 
   const db = await getDb();

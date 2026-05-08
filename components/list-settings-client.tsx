@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { getCurrentUser, getListSnapshot, updateListSettings, addListMember, removeList, updateUserProfile } from "@/lib/local-store";
+import { getCurrentUser, getListSettingsSnapshot, updateListSettings, addListMember, removeList, updateUserProfile } from "@/lib/local-store";
 import type { ShoppingListOverview, ShoppingListSnapshot, UserProfile } from "@/lib/types";
 
 type Props = {
@@ -56,7 +56,7 @@ export function ListSettingsClient({ listId }: Props) {
     setUser(nextUser);
     setProfileName(nextUser?.name ?? "");
     if (nextUser) {
-      setSnapshot(await getListSnapshot(listId, nextUser.id));
+      setSnapshot(await getListSettingsSnapshot(listId, nextUser.id));
     }
   }
 

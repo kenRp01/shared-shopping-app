@@ -135,6 +135,15 @@ export async function GET(request: NextRequest, context: RouteContext) {
   for (const member of visibleMembers) {
     profileIds.add(member.user_id);
   }
+  if (request.nextUrl.searchParams.get("view") === "settings") {
+    const { data: profiles, error: profileError } = await admin.from("profiles").select("*").in("id", [...profileIds]);
+    if (profileError) {
+      return NextResponse.json({ error: profileError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ list, members: visibleMembers, items: [], profiles: profiles ?? [] });
+  }
+
   for (const item of visibleItems) {
     profileIds.add(item.created_by_user_id);
     profileIds.add(item.updated_by_user_id);
