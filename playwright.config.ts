@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const port = Number(process.env.E2E_PORT ?? 3002);
-const baseURL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${port}`;
+const baseURL = process.env.E2E_BASE_URL ?? `http://localhost:${port}`;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -27,7 +27,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `PATH=/usr/local/Cellar/node/25.9.0_2/bin:$PATH /usr/local/Cellar/node/25.9.0_2/bin/node /usr/local/Cellar/node/25.9.0_2/libexec/lib/node_modules/npm/bin/npm-cli.js run dev -- --hostname 127.0.0.1 --port ${port}`,
+    command: `PATH=/usr/local/Cellar/node/25.9.0_2/bin:$PATH /usr/local/Cellar/node/25.9.0_2/bin/node /usr/local/Cellar/node/25.9.0_2/libexec/lib/node_modules/npm/bin/npm-cli.js run dev -- --hostname localhost --port ${port}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
