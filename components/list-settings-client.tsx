@@ -40,6 +40,10 @@ function consumeSettingsCache(listId: string): SettingsCache | null {
   }
 }
 
+function normalizeDisplayName(name: string) {
+  return name === "ひとり利用" ? "個人利用" : name;
+}
+
 export function ListSettingsClient({ listId }: Props) {
   const router = useRouter();
   const [initialCache] = useState(() => consumeSettingsCache(listId));
@@ -47,14 +51,14 @@ export function ListSettingsClient({ listId }: Props) {
   const [snapshot, setSnapshot] = useState<ShoppingListSnapshot | null>(initialCache?.snapshot ?? null);
   const [categories, setCategories] = useState<ShoppingListOverview[]>(initialCache?.categories ?? []);
   const [shareEmail, setShareEmail] = useState("");
-  const [profileName, setProfileName] = useState(initialCache?.user.name ?? "");
+  const [profileName, setProfileName] = useState(normalizeDisplayName(initialCache?.user.name ?? ""));
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   async function refresh(currentUser?: UserProfile | null) {
     const nextUser = currentUser ?? (await getCurrentUser());
     setUser(nextUser);
-    setProfileName(nextUser?.name ?? "");
+    setProfileName(normalizeDisplayName(nextUser?.name ?? ""));
     if (nextUser) {
       setSnapshot(await getListSettingsSnapshot(listId, nextUser.id));
     }
@@ -103,8 +107,7 @@ export function ListSettingsClient({ listId }: Props) {
         }}
       >
         <div className="compact-heading">
-          <p className="eyebrow">User</p>
-          <h2>ユーザー設定</h2>
+          <p className="eyebrow">User Setting</p>
         </div>
         <label>
           表示名
@@ -139,11 +142,10 @@ export function ListSettingsClient({ listId }: Props) {
       >
         <div className="compact-heading">
           <p className="eyebrow">Reminder</p>
-          <h2>通知</h2>
         </div>
         <label className="checkbox-row">
           <input name="dailyReminderEnabled" type="checkbox" defaultChecked={snapshot.list.dailyReminderEnabled} />
-          毎日まとめてリマインドする
+          毎日リマインドする
         </label>
         <label>
           通知時刻
@@ -194,12 +196,11 @@ export function ListSettingsClient({ listId }: Props) {
       >
         <div className="compact-heading">
           <p className="eyebrow">Members</p>
-          <h2>メンバー</h2>
         </div>
         {isGuestUser ? (
           <div className="demo-box">
             <strong>ログインが必要です</strong>
-            <p>ひとり利用のリストはこの端末だけで使えます。ユーザー間で共有する場合は、Googleでログインしてください。</p>
+            <p>個人利用のリストはこの端末だけで使えます。ユーザー間で共有する場合は、Googleでログインしてください。</p>
             <Link href="/login" className="primary-button compact-button">Googleでログイン</Link>
           </div>
         ) : (
@@ -227,8 +228,7 @@ export function ListSettingsClient({ listId }: Props) {
       {canDeleteList ? (
         <section className="panel form-panel danger-panel">
           <div className="compact-heading">
-            <p className="eyebrow">Danger</p>
-            <h2>リスト削除</h2>
+            <p className="eyebrow">Delete</p>
           </div>
           <button
             type="button"

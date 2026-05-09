@@ -23,7 +23,7 @@ export function AuthForm() {
         <p className="eyebrow">Google Login</p>
         <h2>Googleアカウントで共有リストを使う</h2>
         <p className="lead-copy">
-          共有リストはGoogleログインで安全に管理します。ひとり利用はログインなしでも続けられます。
+          共有リストはGoogleログインで安全に管理します。個人利用はログインなしでも続けられます。
         </p>
         <div className="mini-metrics">
           <div><strong>無料</strong><span>Supabase Auth</span></div>

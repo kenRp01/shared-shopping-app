@@ -983,7 +983,7 @@ main {
 
 .quick-add-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 108px 92px;
+  grid-template-columns: minmax(0, 1fr) 64px 92px;
   gap: 9px;
   align-items: end;
 }
@@ -995,6 +995,7 @@ main {
 
 .quick-add-quantity-inline input {
   text-align: center;
+  padding-inline: 8px;
 }
 
 .quick-add-submit {
@@ -1122,6 +1123,8 @@ main {
   gap: 10px;
   overflow-x: auto;
   overflow-y: hidden;
+  padding-block: 5px;
+  margin-block: -5px;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   align-items: center;
@@ -1244,6 +1247,11 @@ main {
   background: rgba(255, 254, 251, 0.94);
   border-color: var(--line);
   color: var(--muted);
+}
+
+.settings-chip-icon svg {
+  width: 23px;
+  height: 23px;
 }
 
 .settings-chip-icon:hover {
@@ -1504,7 +1512,7 @@ code {
   }
 
   .quick-add-row {
-    grid-template-columns: minmax(0, 1fr) 72px 68px;
+    grid-template-columns: minmax(0, 1fr) 54px 68px;
     gap: 8px;
   }
 
@@ -1549,6 +1557,11 @@ code {
     height: 38px;
     min-height: 38px;
     align-self: center;
+  }
+
+  .settings-chip-icon svg {
+    width: 22px;
+    height: 22px;
   }
 
   .quick-add-title .input-with-action {
@@ -1666,7 +1679,7 @@ code {
   }
 
   .quick-add-row {
-    grid-template-columns: minmax(0, 1fr) 72px 66px;
+    grid-template-columns: minmax(0, 1fr) 54px 66px;
   }
 
   .detail-hero .card-actions {
