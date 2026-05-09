@@ -31,6 +31,23 @@ export const DEFAULT_LIST_FORM: CreateListPayload = {
   dailyReminderHour: DEFAULT_REMINDER_HOUR,
 };
 
+export const DEFAULT_STARTER_LISTS: CreateListPayload[] = [
+  {
+    ...DEFAULT_LIST_FORM,
+    name: "マイリスト",
+    description: "",
+    plannedDate: null,
+    visibility: "private",
+  },
+  {
+    ...DEFAULT_LIST_FORM,
+    name: "共有",
+    description: "誰かと共有して使う買い物リスト",
+    plannedDate: null,
+    visibility: "shared",
+  },
+];
+
 export const DEFAULT_ITEM_FORM: CreateItemPayload = {
   title: "",
   quantity: "1",

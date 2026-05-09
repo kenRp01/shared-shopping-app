@@ -6,6 +6,7 @@ import {
   shareMemberSchema,
   updateReminderSettingsSchema,
 } from "@/lib/validation";
+import { DEFAULT_STARTER_LISTS } from "@/lib/constants";
 
 describe("createListSchema", () => {
   it("accepts a valid shared list payload", () => {
@@ -19,6 +20,12 @@ describe("createListSchema", () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it("defines personal and shared starter lists", () => {
+    expect(DEFAULT_STARTER_LISTS.map((list) => list.name)).toEqual(["マイリスト", "共有"]);
+    expect(DEFAULT_STARTER_LISTS.map((list) => list.visibility)).toEqual(["private", "shared"]);
+    expect(DEFAULT_STARTER_LISTS.every((list) => createListSchema.safeParse(list).success)).toBe(true);
   });
 });
 

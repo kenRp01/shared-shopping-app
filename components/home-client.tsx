@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { DEFAULT_LIST_FORM } from "@/lib/constants";
-import { continueAsGuest, createList, getCurrentUser, listAccessibleLists } from "@/lib/local-store";
+import { continueAsGuest, createDefaultLists, ensureDefaultLists, getCurrentUser } from "@/lib/local-store";
 import type { ShoppingListOverview, UserProfile } from "@/lib/types";
 
 export function HomeClient() {
@@ -18,7 +17,7 @@ export function HomeClient() {
     getCurrentUser().then(async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        setLists(await listAccessibleLists(currentUser.id));
+        setLists(await ensureDefaultLists(currentUser));
       }
     });
   }, []);
@@ -76,12 +75,7 @@ export function HomeClient() {
                     if (!user) {
                       throw new Error("開始できませんでした。");
                     }
-                    const list = await createList(user, {
-                      ...DEFAULT_LIST_FORM,
-                      name: "マイリスト",
-                      plannedDate: null,
-                      visibility: "private",
-                    });
+                    const [list] = await createDefaultLists(user);
                     router.push(`/lists/${list.id}`);
                   } catch (error) {
                     setMessage(error instanceof Error ? error.message : "カテゴリーを作成できませんでした。");

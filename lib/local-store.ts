@@ -1,7 +1,7 @@
 "use client";
 
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import { DEFAULT_ITEM_FORM, DEFAULT_LIST_FORM } from "@/lib/constants";
+import { DEFAULT_ITEM_FORM, DEFAULT_LIST_FORM, DEFAULT_STARTER_LISTS } from "@/lib/constants";
 import { buildReminderDigest } from "@/lib/reminders";
 import { createSupabaseBrowserClient, hasSupabaseEnv } from "@/lib/supabase-browser";
 import type {
@@ -664,7 +664,7 @@ export async function continueAsGuest() {
     guest = {
       id: GUEST_USER_ID,
       email: "guest@shareshopi.local",
-      name: "ひとり利用",
+      name: "個人利用",
       createdAt: new Date().toISOString(),
     };
     await db.put("users", guest);
@@ -673,18 +673,8 @@ export async function continueAsGuest() {
   await db.put("session", { userId: guest.id }, "current");
   const profile = toProfile(guest);
   currentUserCache = { user: profile, cachedAt: Date.now() };
-  const existingLists = await listAccessibleLists(profile.id);
-
-  if (existingLists.length > 0) {
-    return { user: profile, listId: existingLists[0].id };
-  }
-
-  const starter = await createList(profile, {
-    ...DEFAULT_LIST_FORM,
-    name: "マイリスト",
-    plannedDate: null,
-    visibility: "private",
-  });
+  const lists = await ensureDefaultLists(profile);
+  const starter = lists.find((list) => list.name === DEFAULT_STARTER_LISTS[0].name) ?? lists[0];
 
   return { user: profile, listId: starter.id };
 }
@@ -895,6 +885,42 @@ export async function createList(viewer: UserProfile, payload: CreateListPayload
   return list;
 }
 
+export async function createDefaultLists(viewer: UserProfile) {
+  if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
+    const shared = await createList(viewer, DEFAULT_STARTER_LISTS[1]);
+    const personal = await createList(viewer, DEFAULT_STARTER_LISTS[0]);
+    return [personal, shared];
+  }
+
+  const personal = await createList(viewer, DEFAULT_STARTER_LISTS[0]);
+  const shared = await createList(viewer, DEFAULT_STARTER_LISTS[1]);
+  return [personal, shared];
+}
+
+export async function ensureDefaultLists(viewer: UserProfile) {
+  const existingLists = await listAccessibleLists(viewer.id);
+  const hasPersonal = existingLists.some((list) => list.name === DEFAULT_STARTER_LISTS[0].name);
+  const hasShared = existingLists.some((list) => list.name === DEFAULT_STARTER_LISTS[1].name);
+
+  if (hasPersonal && hasShared) {
+    return existingLists;
+  }
+
+  if (!hasPersonal && !hasShared) {
+    await createDefaultLists(viewer);
+    return listAccessibleLists(viewer.id);
+  }
+
+  if (!hasPersonal) {
+    await createList(viewer, DEFAULT_STARTER_LISTS[0]);
+  }
+  if (!hasShared) {
+    await createList(viewer, DEFAULT_STARTER_LISTS[1]);
+  }
+
+  return listAccessibleLists(viewer.id);
+}
+
 export async function reorderLists(viewer: UserProfile, orderedListIds: string[]) {
   if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
     // Supabase schema v1 does not require persisted category ordering yet.
@@ -1032,7 +1058,14 @@ export async function getListSettingsSnapshot(listId: string, viewerId?: string 
     return response?.list ? buildSupabaseSnapshot(response, viewerId) : null;
   }
 
-  return getListSnapshot(listId, viewerId);
+  const db = await getDb();
+  const [lists, members, users] = await Promise.all([
+    db.getAll("lists"),
+    db.getAll("members"),
+    db.getAll("users"),
+  ]);
+
+  return buildLocalSnapshotFromData(listId, viewerId, lists, members, users, []);
 }
 
 export async function getInitialListSnapshotBundle(

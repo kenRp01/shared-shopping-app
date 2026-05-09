@@ -115,13 +115,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "リストが見つかりません。" }, { status: 404 });
   }
 
-  const [{ data: members, error: memberError }, { data: items, error: itemError }] = await Promise.all([
-    admin.from("shopping_list_members").select("*").eq("list_id", listId),
-    admin.from("shopping_items").select("*").eq("list_id", listId),
-  ]);
+  const isSettingsView = request.nextUrl.searchParams.get("view") === "settings";
+  const { data: members, error: memberError } = await admin.from("shopping_list_members").select("*").eq("list_id", listId);
 
-  if (memberError || itemError) {
-    return NextResponse.json({ error: memberError?.message || itemError?.message || "リストを取得できませんでした。" }, { status: 500 });
+  if (memberError) {
+    return NextResponse.json({ error: memberError.message || "リストを取得できませんでした。" }, { status: 500 });
   }
 
   const visibleMembers = members ?? [];
@@ -130,12 +128,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "このリストを表示できません。" }, { status: 403 });
   }
 
-  const visibleItems = items ?? [];
   const profileIds = new Set<string>([list.owner_user_id]);
   for (const member of visibleMembers) {
     profileIds.add(member.user_id);
   }
-  if (request.nextUrl.searchParams.get("view") === "settings") {
+  if (isSettingsView) {
     const { data: profiles, error: profileError } = await admin.from("profiles").select("*").in("id", [...profileIds]);
     if (profileError) {
       return NextResponse.json({ error: profileError.message }, { status: 500 });
@@ -144,6 +141,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ list, members: visibleMembers, items: [], profiles: profiles ?? [] });
   }
 
+  const { data: items, error: itemError } = await admin.from("shopping_items").select("*").eq("list_id", listId);
+  if (itemError) {
+    return NextResponse.json({ error: itemError.message || "リストを取得できませんでした。" }, { status: 500 });
+  }
+
+  const visibleItems = items ?? [];
   for (const item of visibleItems) {
     profileIds.add(item.created_by_user_id);
     profileIds.add(item.updated_by_user_id);

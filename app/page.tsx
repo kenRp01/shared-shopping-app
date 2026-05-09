@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DEFAULT_LIST_FORM } from "@/lib/constants";
-import { continueAsGuest, createList, getCurrentUser, getInitialListSnapshotBundle } from "@/lib/local-store";
+import { DEFAULT_STARTER_LISTS } from "@/lib/constants";
+import { continueAsGuest, createDefaultLists, ensureDefaultLists, getCurrentUser, getInitialListSnapshotBundle } from "@/lib/local-store";
 
 export default function HomePage() {
   const router = useRouter();
@@ -28,9 +28,20 @@ export default function HomePage() {
           return;
         }
 
-        const initial = await getInitialListSnapshotBundle(user.id);
+        let initial = await getInitialListSnapshotBundle(user.id);
         if (!active) {
           return;
+        }
+
+        const hasStarterLists = DEFAULT_STARTER_LISTS.every((starter) =>
+          initial.categories.some((list) => list.name === starter.name),
+        );
+        if (!hasStarterLists) {
+          await ensureDefaultLists(user);
+          initial = await getInitialListSnapshotBundle(user.id);
+          if (!active) {
+            return;
+          }
         }
 
         if (initial.snapshot) {
@@ -47,12 +58,7 @@ export default function HomePage() {
           return;
         }
 
-        const starter = await createList(user, {
-          ...DEFAULT_LIST_FORM,
-          name: "マイリスト",
-          plannedDate: null,
-          visibility: "private",
-        });
+        const [starter] = await createDefaultLists(user);
 
         if (active) {
           router.replace(`/lists/${starter.id}`);

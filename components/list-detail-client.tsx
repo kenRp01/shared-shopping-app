@@ -6,6 +6,7 @@ import { useEffect, useState, useTransition, type Dispatch, type DragEvent, type
 import { DEFAULT_ITEM_FORM, DEFAULT_LIST_FORM } from "@/lib/constants";
 import {
   createList,
+  createDefaultLists,
   createItem,
   continueAsGuest,
   getCurrentUser,
@@ -109,7 +110,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CreateItemPayload>(DEFAULT_ITEM_FORM);
   const [editCategoryId, setEditCategoryId] = useState<string>("");
-  const [newCategoryName, setNewCategoryName] = useState("");
   const [showCategoryCreate, setShowCategoryCreate] = useState(false);
   const [categoryFormName, setCategoryFormName] = useState("");
   const [optimisticListId, setOptimisticListId] = useState<string | null>(null);
@@ -132,6 +132,10 @@ export function ListDetailClient({ listId, publicToken }: Props) {
         setCategories(cached.categories);
         setOptimisticListId(null);
         setIsResolvingList(false);
+        window.setTimeout(() => {
+          refresh(nextUser, { useCache: false, listId: targetListId });
+        }, 0);
+        return;
       }
 
       let nextCategories: ShoppingListOverview[] = [];
@@ -160,12 +164,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
             return;
           }
 
-          const starter = await createList(nextUser, {
-            ...DEFAULT_LIST_FORM,
-            name: "マイリスト",
-            plannedDate: null,
-            visibility: "private",
-          });
+          const [starter] = await createDefaultLists(nextUser);
           router.replace(`/lists/${starter.id}`);
           return;
         }
@@ -322,8 +321,22 @@ export function ListDetailClient({ listId, publicToken }: Props) {
       return;
     }
 
+    const settingsSnapshot: ShoppingListSnapshot = {
+      ...snapshot,
+      items: [],
+    };
+
     sessionStorage.setItem(
       SETTINGS_CACHE_KEY,
+      JSON.stringify({
+        user,
+        snapshot: settingsSnapshot,
+        categories,
+        cachedAt: Date.now(),
+      }),
+    );
+    sessionStorage.setItem(
+      INITIAL_CACHE_KEY,
       JSON.stringify({
         user,
         snapshot,
@@ -368,6 +381,14 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   useEffect(() => {
     refresh(undefined, { useCache: true, listId: activeListId });
   }, [activeListId, publicToken]);
+
+  useEffect(() => {
+    if (!snapshot || publicToken) {
+      return;
+    }
+
+    router.prefetch(`/lists/${snapshot.list.id}/settings`);
+  }, [publicToken, router, snapshot?.list.id]);
 
   const pendingItems = snapshot?.items.filter((item) => item.status === "pending") ?? [];
 
@@ -720,18 +741,9 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                     snapshot.permission === "edit" && !publicToken
                       ? async (payload) => {
                           if (!user) return;
-                          let targetCategoryId = editCategoryId || snapshot.list.id;
-                          if (newCategoryName.trim()) {
-                            const nextList = await createList(user, {
-                              ...DEFAULT_LIST_FORM,
-                              name: newCategoryName.trim(),
-                              plannedDate: null,
-                            });
-                            targetCategoryId = nextList.id;
-                          }
+                          const targetCategoryId = editCategoryId || snapshot.list.id;
                           await updateItem(snapshot.list.id, item.id, user, payload, targetCategoryId);
                           setEditingItemId(null);
-                          setNewCategoryName("");
                           await refresh(user, { useCache: false });
                         }
                       : undefined
@@ -740,7 +752,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
               onStartEdit={() => {
                 setEditingItemId(item.id);
                 setEditCategoryId(snapshot.list.id);
-                setNewCategoryName("");
                 setEditForm({
                   title: item.title,
                   quantity: item.quantity,
@@ -758,8 +769,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
               categories={categories}
               editCategoryId={editCategoryId}
               setEditCategoryId={setEditCategoryId}
-              newCategoryName={newCategoryName}
-              setNewCategoryName={setNewCategoryName}
             />
           ))}
         </div>
@@ -787,8 +796,6 @@ function ItemRow({
   categories,
   editCategoryId,
   setEditCategoryId,
-  newCategoryName,
-  setNewCategoryName,
 }: {
   item: ShoppingItemView;
   editable: boolean;
@@ -808,8 +815,6 @@ function ItemRow({
   categories: ShoppingListOverview[];
   editCategoryId: string;
   setEditCategoryId: Dispatch<SetStateAction<string>>;
-  newCategoryName: string;
-  setNewCategoryName: Dispatch<SetStateAction<string>>;
 }) {
   const [isSaving, startSaving] = useTransition();
   const [editMessage, setEditMessage] = useState<string | null>(null);
@@ -878,7 +883,7 @@ function ItemRow({
           action={() => {
             startSaving(async () => {
               try {
-                await onEdit(editForm);
+                await onEdit({ ...editForm, remindOn: editForm.dueDate });
                 setEditMessage(null);
               } catch (error) {
                 setEditMessage(error instanceof Error ? error.message : "保存できませんでした。");
@@ -904,10 +909,6 @@ function ItemRow({
               </select>
             </label>
             <label>
-              新しいカテゴリー
-              <input value={newCategoryName} placeholder="必要なときだけ入力" onChange={(event) => setNewCategoryName(event.target.value)} />
-            </label>
-            <label>
               登録タイプ
               <select
                 value={editForm.scope}
@@ -922,7 +923,10 @@ function ItemRow({
               <input
                 type="date"
                 value={editForm.dueDate ?? ""}
-                onChange={(event) => setEditForm((current) => ({ ...current, dueDate: event.target.value || null }))}
+                onChange={(event) => {
+                  const nextDate = event.target.value || null;
+                  setEditForm((current) => ({ ...current, dueDate: nextDate, remindOn: nextDate }));
+                }}
               />
             </label>
             <label>
@@ -931,14 +935,6 @@ function ItemRow({
                 type="time"
                 value={editForm.dueTime ?? ""}
                 onChange={(event) => setEditForm((current) => ({ ...current, dueTime: event.target.value || null }))}
-              />
-            </label>
-            <label>
-              リマインド日
-              <input
-                type="date"
-                value={editForm.remindOn ?? ""}
-                onChange={(event) => setEditForm((current) => ({ ...current, remindOn: event.target.value || null }))}
               />
             </label>
           </div>
