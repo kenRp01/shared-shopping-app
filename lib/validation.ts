@@ -13,6 +13,10 @@ export const shareMemberSchema = z.object({
   email: z.string().email(),
 });
 
+export const inviteTokenSchema = z.object({
+  token: z.string().min(8).max(80).regex(/^[a-zA-Z0-9_-]+$/),
+});
+
 export const emailAuthSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8).max(72),

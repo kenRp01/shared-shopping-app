@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { getCurrentUser, getListSettingsSnapshot, updateListSettings, addListMember, removeList, updateUserProfile } from "@/lib/local-store";
-import type { ShoppingListOverview, ShoppingListSnapshot, UserProfile } from "@/lib/types";
+import QRCode from "qrcode";
+import { getCurrentUser, getListSettingsSnapshot, updateListSettings, addListMember, removeList, updateUserProfile, createListInvite } from "@/lib/local-store";
+import type { ListInvite, ShoppingListOverview, ShoppingListSnapshot, UserProfile } from "@/lib/types";
 
 type Props = {
   listId: string;
@@ -51,6 +52,8 @@ export function ListSettingsClient({ listId }: Props) {
   const [snapshot, setSnapshot] = useState<ShoppingListSnapshot | null>(initialCache?.snapshot ?? null);
   const [categories, setCategories] = useState<ShoppingListOverview[]>(initialCache?.categories ?? []);
   const [shareEmail, setShareEmail] = useState("");
+  const [invite, setInvite] = useState<ListInvite | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [profileName, setProfileName] = useState(normalizeDisplayName(initialCache?.user.name ?? ""));
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -70,6 +73,35 @@ export function ListSettingsClient({ listId }: Props) {
     }
     refresh();
   }, [listId]);
+
+  useEffect(() => {
+    let active = true;
+    if (!invite?.url) {
+      setQrDataUrl(null);
+      return;
+    }
+
+    QRCode.toDataURL(invite.url, {
+      margin: 1,
+      width: 176,
+      color: {
+        dark: "#17362b",
+        light: "#fffefb",
+      },
+    }).then((dataUrl) => {
+      if (active) {
+        setQrDataUrl(dataUrl);
+      }
+    }).catch(() => {
+      if (active) {
+        setQrDataUrl(null);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [invite?.url]);
 
   if (!snapshot || snapshot.permission !== "edit") {
     return (
@@ -205,6 +237,49 @@ export function ListSettingsClient({ listId }: Props) {
           </div>
         ) : (
           <>
+            <div className="invite-card">
+              <div>
+                <strong>招待リンク</strong>
+                <p>リンクかQRで共有できます。</p>
+              </div>
+              <div className="invite-actions">
+                <button
+                  type="button"
+                  className="ghost-button compact-button"
+                  disabled={isPending}
+                  onClick={() => {
+                    startTransition(async () => {
+                      try {
+                        if (!user) {
+                          throw new Error("ログインが必要です。");
+                        }
+                        const nextInvite = await createListInvite(listId, user);
+                        setInvite(nextInvite);
+                        setMessage("招待リンクを作成しました。");
+                      } catch (error) {
+                        setMessage(error instanceof Error ? error.message : "招待リンクを作成できませんでした。");
+                      }
+                    });
+                  }}
+                >
+                  リンク作成
+                </button>
+                {invite?.url ? (
+                  <button
+                    type="button"
+                    className="ghost-button compact-button"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(invite.url);
+                      setMessage("招待リンクをコピーしました。");
+                    }}
+                  >
+                    コピー
+                  </button>
+                ) : null}
+              </div>
+              {invite?.url ? <code className="invite-url">{invite.url}</code> : null}
+              {qrDataUrl ? <img className="invite-qr" src={qrDataUrl} alt="共有招待リンクのQRコード" /> : null}
+            </div>
             <label>
               登録済みユーザーのメールアドレス
               <input type="email" value={shareEmail} onChange={(event) => setShareEmail(event.target.value)} placeholder="takumi@example.com" />
@@ -216,7 +291,7 @@ export function ListSettingsClient({ listId }: Props) {
           {snapshot.members.map((member) => (
             <div className="member-row" key={member.id}>
               <div>
-                <strong>{member.name}</strong>
+                <strong>{normalizeDisplayName(member.name)}</strong>
                 <p>{member.email}</p>
               </div>
               <span className="tag">{member.role === "owner" ? "所有者" : "編集者"}</span>

@@ -3,6 +3,7 @@ import {
   contactMessageSchema,
   createItemSchema,
   createListSchema,
+  inviteTokenSchema,
   shareMemberSchema,
   updateReminderSettingsSchema,
 } from "@/lib/validation";
@@ -50,6 +51,13 @@ describe("shareMemberSchema", () => {
   it("requires an email address", () => {
     expect(shareMemberSchema.safeParse({ email: "friend@example.com" }).success).toBe(true);
     expect(shareMemberSchema.safeParse({ email: "not-an-email" }).success).toBe(false);
+  });
+});
+
+describe("inviteTokenSchema", () => {
+  it("accepts URL-safe invite tokens only", () => {
+    expect(inviteTokenSchema.safeParse({ token: "invite_abc-123XYZ" }).success).toBe(true);
+    expect(inviteTokenSchema.safeParse({ token: "bad token!" }).success).toBe(false);
   });
 });
 

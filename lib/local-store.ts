@@ -8,6 +8,7 @@ import type {
   CreateItemPayload,
   CreateListPayload,
   LocalUserAccount,
+  ListInvite,
   ReminderDeliveryLog,
   ReminderDigest,
   SessionRecord,
@@ -1436,6 +1437,27 @@ export async function addListMember(listId: string, email: string, viewer: UserP
     createdAt: new Date().toISOString(),
   };
   await db.put("members", member);
+}
+
+export async function createListInvite(listId: string, viewer: UserProfile): Promise<ListInvite> {
+  if (!hasSupabaseEnv() || viewer.id === GUEST_USER_ID) {
+    throw new Error("招待リンクを作るにはGoogleログインが必要です。");
+  }
+
+  const { invite } = await requestJson<{ invite: ListInvite }>(`/api/lists/${listId}/invite`, {
+    method: "POST",
+  });
+  return invite;
+}
+
+export async function acceptListInvite(token: string, viewer: UserProfile) {
+  if (!hasSupabaseEnv() || viewer.id === GUEST_USER_ID) {
+    throw new Error("共有リストに参加するにはGoogleログインが必要です。");
+  }
+
+  return requestJson<{ listId: string }>(`/api/invites/${token}/accept`, {
+    method: "POST",
+  });
 }
 
 export async function updateListSettings(listId: string, viewer: UserProfile, payload: UpdateReminderSettingsPayload) {

@@ -70,6 +70,15 @@ create table if not exists public.reminder_delivery_logs (
   unique (list_id, delivery_date)
 );
 
+create table if not exists public.shopping_list_invites (
+  id uuid primary key default gen_random_uuid(),
+  list_id uuid not null references public.shopping_lists(id) on delete cascade,
+  token text not null unique,
+  enabled boolean not null default true,
+  created_by_user_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
 alter table public.shopping_lists
   add column if not exists planned_date date,
   add column if not exists public_token text,
@@ -113,6 +122,12 @@ create index if not exists shopping_items_remind_on_idx
 create index if not exists reminder_delivery_logs_list_id_idx
   on public.reminder_delivery_logs(list_id);
 
+create index if not exists shopping_list_invites_list_id_idx
+  on public.shopping_list_invites(list_id);
+
+create index if not exists shopping_list_invites_token_idx
+  on public.shopping_list_invites(token);
+
 drop trigger if exists shopping_lists_set_updated_at on public.shopping_lists;
 create trigger shopping_lists_set_updated_at
 before update on public.shopping_lists
@@ -154,6 +169,7 @@ alter table public.shopping_lists enable row level security;
 alter table public.shopping_list_members enable row level security;
 alter table public.shopping_items enable row level security;
 alter table public.reminder_delivery_logs enable row level security;
+alter table public.shopping_list_invites enable row level security;
 
 drop policy if exists "profiles_read_own" on public.profiles;
 create policy "profiles_read_own" on public.profiles
@@ -242,6 +258,36 @@ create policy "member_write_owner" on public.shopping_list_members
       select 1
       from public.shopping_lists l
       where l.id = shopping_list_members.list_id
+      and l.owner_user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "invite_read_owner" on public.shopping_list_invites;
+create policy "invite_read_owner" on public.shopping_list_invites
+  for select using (
+    exists (
+      select 1
+      from public.shopping_lists l
+      where l.id = shopping_list_invites.list_id
+      and l.owner_user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "invite_write_owner" on public.shopping_list_invites;
+create policy "invite_write_owner" on public.shopping_list_invites
+  for all using (
+    exists (
+      select 1
+      from public.shopping_lists l
+      where l.id = shopping_list_invites.list_id
+      and l.owner_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.shopping_lists l
+      where l.id = shopping_list_invites.list_id
       and l.owner_user_id = auth.uid()
     )
   );

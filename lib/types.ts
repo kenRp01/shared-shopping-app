@@ -132,6 +132,11 @@ export type ShoppingListSnapshot = {
   permission: "edit" | "view";
 };
 
+export type ListInvite = {
+  token: string;
+  url: string;
+};
+
 export type ReminderItemGroup = {
   dueToday: ShoppingItemView[];
   overdue: ShoppingItemView[];

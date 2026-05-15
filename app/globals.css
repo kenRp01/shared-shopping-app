@@ -701,6 +701,42 @@ main {
   flex-direction: column;
 }
 
+.invite-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(37, 116, 90, 0.14);
+  background: var(--accent-soft);
+}
+
+.invite-card p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.invite-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.invite-url {
+  display: block;
+  overflow-wrap: anywhere;
+  border-radius: 14px;
+  background: rgba(255, 254, 251, 0.78);
+}
+
+.invite-qr {
+  width: 176px;
+  height: 176px;
+  padding: 10px;
+  border-radius: 18px;
+  background: white;
+  box-shadow: var(--shadow-soft);
+}
+
 .demo-row,
 .member-row,
 .item-row {
@@ -1072,6 +1108,10 @@ main {
   padding: 22px;
 }
 
+.list-section-panel {
+  overflow: clip;
+}
+
 .feature-grid-compact {
   gap: 16px;
 }
@@ -1109,6 +1149,14 @@ main {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
+  position: sticky;
+  top: 194px;
+  z-index: 8;
+  margin: -4px -4px 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 254, 251, 0.86);
+  backdrop-filter: blur(14px);
 }
 
 .category-actions {
@@ -1116,18 +1164,22 @@ main {
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
+  padding-left: 8px;
+  background: linear-gradient(90deg, rgba(255, 254, 251, 0), rgba(255, 254, 251, 0.96) 18%);
 }
 
 .category-strip {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   overflow-x: auto;
   overflow-y: hidden;
   padding-block: 5px;
   margin-block: -5px;
+  padding-inline: 2px 18px;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   align-items: center;
+  scroll-snap-type: x proximity;
 }
 
 .category-strip::-webkit-scrollbar {
@@ -1137,6 +1189,7 @@ main {
 .category-pill-holder {
   flex: 0 0 auto;
   transition: transform 140ms ease, opacity 140ms ease;
+  scroll-snap-align: start;
 }
 
 .category-pill-holder-dragging {
@@ -1147,7 +1200,7 @@ main {
 .category-pill {
   flex: 0 0 auto;
   min-height: 38px;
-  padding: 0 16px;
+  padding: 0 17px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--surface);
@@ -1176,8 +1229,8 @@ main {
 
 .category-add-button {
   flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   border-radius: 999px;
   border: 1px solid rgba(37, 116, 90, 0.2);
   background: var(--accent-soft);
@@ -1517,7 +1570,10 @@ code {
   }
 
   .quick-add-panel {
-    top: 78px;
+    top: 10px;
+    z-index: 12;
+    border-radius: 22px;
+    box-shadow: 0 18px 38px rgba(37, 116, 90, 0.12);
   }
 
   .quick-add-submit {
@@ -1531,20 +1587,26 @@ code {
   .category-toolbar {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
+    top: 92px;
+    margin: -2px -2px 8px;
+    padding: 2px;
+    box-shadow: 0 10px 28px rgba(27, 42, 65, 0.06);
   }
 
   .category-actions {
     gap: 6px;
+    padding-left: 10px;
   }
 
   .category-pill {
-    min-height: 36px;
-    padding-inline: 14px;
+    min-height: 40px;
+    padding-inline: 18px;
+    font-size: 0.95rem;
   }
 
   .category-add-button {
-    width: 38px;
-    height: 38px;
+    width: 42px;
+    height: 42px;
   }
 
   .settings-chip {
@@ -1610,6 +1672,12 @@ code {
 
   .aside-panel {
     position: static;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 900px) {
+  .category-toolbar {
+    top: 112px;
   }
 }
 
@@ -1679,7 +1747,7 @@ code {
   }
 
   .quick-add-row {
-    grid-template-columns: minmax(0, 1fr) 54px 66px;
+    grid-template-columns: minmax(0, 1fr) 52px 64px;
   }
 
   .detail-hero .card-actions {
