@@ -35,11 +35,9 @@ test.describe("Public beta pages", () => {
     await expect(page.getByText("送信しました。内容を確認して返信します。")).toBeVisible();
   });
 
-  test("exposes footer links from the login page", async ({ page }) => {
+  test("does not show the old global footer on the login page", async ({ page }) => {
     await page.goto("/login");
 
-    await expect(page.getByRole("link", { name: "利用規約" })).toHaveAttribute("href", "/terms");
-    await expect(page.getByRole("link", { name: "プライバシー" })).toHaveAttribute("href", "/privacy");
-    await expect(page.getByRole("link", { name: "問い合わせ" })).toHaveAttribute("href", "/contact");
+    await expect(page.locator("footer.site-footer")).toHaveCount(0);
   });
 });
