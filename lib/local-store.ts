@@ -888,8 +888,8 @@ export async function createList(viewer: UserProfile, payload: CreateListPayload
 
 export async function createDefaultLists(viewer: UserProfile) {
   if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
-    const shared = await createList(viewer, DEFAULT_STARTER_LISTS[1]);
     const personal = await createList(viewer, DEFAULT_STARTER_LISTS[0]);
+    const shared = await createList(viewer, DEFAULT_STARTER_LISTS[1]);
     return [personal, shared];
   }
 

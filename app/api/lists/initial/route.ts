@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sortSupabaseListsByCreatedAt } from "@/lib/list-order";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 
 async function getViewer(request: NextRequest, admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>) {
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
     listMap.set(list.id, list);
   }
 
-  const lists = [...listMap.values()].sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+  const lists = sortSupabaseListsByCreatedAt([...listMap.values()]);
   const listIds = lists.map((list) => list.id);
   const [membersResult, overviewItemsResult] = listIds.length
     ? await Promise.all([

@@ -6,6 +6,26 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+type SupabaseLikeError = {
+  code?: string;
+  message?: string;
+};
+
+function isMissingInviteTable(error: SupabaseLikeError | null) {
+  return (
+    error?.code === "PGRST205" ||
+    error?.message?.includes("shopping_list_invites") ||
+    error?.message?.includes("schema cache")
+  );
+}
+
+function inviteTableErrorResponse() {
+  return NextResponse.json(
+    { error: "招待リンク用のDB設定が未反映です。公開リンクのQR共有を使うか、Supabaseでschema.sqlを適用してください。" },
+    { status: 500 },
+  );
+}
+
 async function getViewer(request: NextRequest, admin: NonNullable<ReturnType<typeof createSupabaseAdminClient>>) {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   if (!token) {
@@ -56,6 +76,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     .maybeSingle();
 
   if (existingError) {
+    if (isMissingInviteTable(existingError)) {
+      return inviteTableErrorResponse();
+    }
     return NextResponse.json({ error: existingError.message }, { status: 500 });
   }
 
@@ -68,6 +91,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       created_by_user_id: viewer!.id,
     });
     if (inviteError) {
+      if (isMissingInviteTable(inviteError)) {
+        return inviteTableErrorResponse();
+      }
       return NextResponse.json({ error: inviteError.message }, { status: 500 });
     }
   }
