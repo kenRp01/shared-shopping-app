@@ -45,6 +45,14 @@ function normalizeDisplayName(name: string) {
   return name === "ひとり利用" ? "個人利用" : name;
 }
 
+function friendlyInviteError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  if (message.includes("shopping_list_invites") || message.includes("schema cache")) {
+    return "招待リンク用のDB設定が未反映です。公開リンクのQR共有を使うか、Supabaseでschema.sqlを適用してください。";
+  }
+  return message || "招待リンクを作成できませんでした。";
+}
+
 export function ListSettingsClient({ listId }: Props) {
   const router = useRouter();
   const [initialCache] = useState(() => consumeSettingsCache(listId));
@@ -54,6 +62,8 @@ export function ListSettingsClient({ listId }: Props) {
   const [shareEmail, setShareEmail] = useState("");
   const [invite, setInvite] = useState<ListInvite | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [publicQrDataUrl, setPublicQrDataUrl] = useState<string | null>(null);
+  const [origin, setOrigin] = useState("");
   const [profileName, setProfileName] = useState(normalizeDisplayName(initialCache?.user.name ?? ""));
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -73,6 +83,10 @@ export function ListSettingsClient({ listId }: Props) {
     }
     refresh();
   }, [listId]);
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -103,6 +117,39 @@ export function ListSettingsClient({ listId }: Props) {
     };
   }, [invite?.url]);
 
+  const publicUrl = snapshot?.list.publicToken ? `${origin}/public/${snapshot.list.publicToken}` : null;
+
+  useEffect(() => {
+    let active = true;
+    if (!publicUrl) {
+      setPublicQrDataUrl(null);
+      return;
+    }
+
+    QRCode.toDataURL(publicUrl, {
+      margin: 1,
+      width: 176,
+      color: {
+        dark: "#17362b",
+        light: "#fffefb",
+      },
+    })
+      .then((dataUrl) => {
+        if (active) {
+          setPublicQrDataUrl(dataUrl);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setPublicQrDataUrl(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [publicUrl]);
+
   if (!snapshot || snapshot.permission !== "edit") {
     return (
       <section className="panel">
@@ -115,14 +162,35 @@ export function ListSettingsClient({ listId }: Props) {
   const isGuestUser = user?.email.endsWith("@shareshopi.local") ?? false;
 
   return (
-    <div className="page-grid">
-      <section className="panel">
-        <p className="eyebrow">List Settings</p>
-        <h2>{snapshot.list.name}</h2>
+    <div className="page-grid settings-shell">
+      <section className="settings-appbar" aria-label="設定ヘッダー">
+        <Link href={`/lists/${listId}`} className="settings-back-link" aria-label="リストへ戻る">
+          <BackIcon />
+        </Link>
+        <div>
+          <h2>Settings</h2>
+          <p>{snapshot.list.name}</p>
+        </div>
+      </section>
+
+      {message ? <p className="settings-notice">{message}</p> : null}
+
+      <section className="settings-section">
+        <p className="settings-section-title">LIST SETTINGS</p>
+        <a href="#sharing" className="settings-nav-card">
+          <span className="settings-nav-icon">
+            <ShareIcon />
+          </span>
+          <span>
+            <strong>Sharing</strong>
+            <small>Manage collaborators</small>
+          </span>
+          <ChevronIcon />
+        </a>
       </section>
 
       <form
-        className="panel form-panel"
+        className="settings-section"
         action={() => {
           startTransition(async () => {
             try {
@@ -138,20 +206,20 @@ export function ListSettingsClient({ listId }: Props) {
           });
         }}
       >
-        <div className="compact-heading">
-          <p className="eyebrow">User Setting</p>
+        <p className="settings-section-title">USER SETTING</p>
+        <div className="settings-card">
+          <label className="settings-field">
+            <span>Display Name</span>
+            <input value={profileName} onChange={(event) => setProfileName(event.target.value)} placeholder="Display Name" />
+          </label>
+          <button type="submit" className="primary-button settings-save-button" disabled={isPending}>
+            {isPending ? "Saving..." : "Save User Settings"}
+          </button>
         </div>
-        <label>
-          表示名
-          <input value={profileName} onChange={(event) => setProfileName(event.target.value)} placeholder="表示名" />
-        </label>
-        <button type="submit" className="primary-button" disabled={isPending}>
-          {isPending ? "保存中..." : "ユーザー設定を保存"}
-        </button>
       </form>
 
       <form
-        className="panel form-panel"
+        className="settings-section"
         action={(formData) => {
           startTransition(async () => {
             try {
@@ -172,44 +240,55 @@ export function ListSettingsClient({ listId }: Props) {
           });
         }}
       >
-        <div className="compact-heading">
-          <p className="eyebrow">Reminder</p>
+        <p className="settings-section-title">REMINDER</p>
+        <div className="settings-card settings-reminder-card">
+          <label className="settings-toggle-row">
+            <span>Daily Reminder</span>
+            <input name="dailyReminderEnabled" type="checkbox" defaultChecked={snapshot.list.dailyReminderEnabled} />
+          </label>
+          <label className="settings-time-row">
+            <span>Notification Time</span>
+            <span className="settings-time-input">
+              <ClockIcon />
+              <input name="dailyReminderHour" type="time" defaultValue={snapshot.list.dailyReminderHour} />
+            </span>
+          </label>
         </div>
-        <label className="checkbox-row">
-          <input name="dailyReminderEnabled" type="checkbox" defaultChecked={snapshot.list.dailyReminderEnabled} />
-          毎日リマインドする
-        </label>
-        <label>
-          通知時刻
-          <input name="dailyReminderHour" type="time" defaultValue={snapshot.list.dailyReminderHour} />
-        </label>
-        <label>
-          基本の公開範囲
-          <select name="visibility" defaultValue={snapshot.list.visibility}>
-            <option value="private">自分のみ</option>
-            <option value="shared">共有メンバー</option>
-            <option value="public_link">公開リンク</option>
-          </select>
-        </label>
-        <label className="checkbox-row">
-          <input name="publicEnabled" type="checkbox" defaultChecked={Boolean(snapshot.list.publicToken)} />
-          公開リンクを有効化する
-        </label>
-        {snapshot.list.publicToken ? (
-          <div className="demo-box">
-            <strong>公開URL</strong>
-            <p>/public/{snapshot.list.publicToken}</p>
-            <Link href={`/public/${snapshot.list.publicToken}`} className="text-link">公開ページを開く</Link>
-          </div>
-        ) : null}
-        {message ? <p className="notice-inline">{message}</p> : null}
-        <button type="submit" className="primary-button" disabled={isPending}>
-          {isPending ? "保存中..." : "設定を保存"}
-        </button>
+
+        <p className="settings-section-title">PUBLICITY</p>
+        <div className="settings-card settings-public-card">
+          <label className="settings-field">
+            <span>Visibility Level</span>
+            <select name="visibility" defaultValue={snapshot.list.visibility}>
+              <option value="private">Private</option>
+              <option value="shared">Shared Members</option>
+              <option value="public_link">Public Link</option>
+            </select>
+          </label>
+          <label className="settings-toggle-row">
+            <span>Enable Public Link</span>
+            <input name="publicEnabled" type="checkbox" defaultChecked={Boolean(snapshot.list.publicToken)} />
+          </label>
+          {snapshot.list.publicToken ? (
+            <div className="settings-public-url">
+              <span>Public URL</span>
+              <strong>{publicUrl}</strong>
+              <Link href={`/public/${snapshot.list.publicToken}`} className="text-link">
+                <OpenIcon />
+                Open Public Page
+              </Link>
+              {publicQrDataUrl ? <img className="invite-qr" src={publicQrDataUrl} alt="公開リンクのQRコード" /> : null}
+            </div>
+          ) : null}
+          <button type="submit" className="primary-button settings-save-button" disabled={isPending}>
+            {isPending ? "Saving..." : "Save List Settings"}
+          </button>
+        </div>
       </form>
 
       <form
-        className="panel form-panel"
+        id="sharing"
+        className="settings-section"
         action={() => {
           startTransition(async () => {
             try {
@@ -226,88 +305,89 @@ export function ListSettingsClient({ listId }: Props) {
           });
         }}
       >
-        <div className="compact-heading">
-          <p className="eyebrow">Members</p>
-        </div>
-        {isGuestUser ? (
-          <div className="demo-box">
-            <strong>ログインが必要です</strong>
-            <p>個人利用のリストはこの端末だけで使えます。ユーザー間で共有する場合は、Googleでログインしてください。</p>
-            <Link href="/login" className="primary-button compact-button">Googleでログイン</Link>
-          </div>
-        ) : (
-          <>
-            <div className="invite-card">
-              <div>
-                <strong>招待リンク</strong>
-                <p>リンクかQRで共有できます。</p>
-              </div>
-              <div className="invite-actions">
-                <button
-                  type="button"
-                  className="ghost-button compact-button"
-                  disabled={isPending}
-                  onClick={() => {
-                    startTransition(async () => {
-                      try {
-                        if (!user) {
-                          throw new Error("ログインが必要です。");
-                        }
-                        const nextInvite = await createListInvite(listId, user);
-                        setInvite(nextInvite);
-                        setMessage("招待リンクを作成しました。");
-                      } catch (error) {
-                        setMessage(error instanceof Error ? error.message : "招待リンクを作成できませんでした。");
-                      }
-                    });
-                  }}
-                >
-                  リンク作成
-                </button>
-                {invite?.url ? (
+        <p className="settings-section-title">MEMBERS</p>
+        <div className="settings-card settings-sharing-card">
+          {isGuestUser ? (
+            <div className="demo-box settings-login-box">
+              <strong>ログインが必要です</strong>
+              <p>個人利用のリストはこの端末だけで使えます。ユーザー間で共有する場合は、Googleでログインしてください。</p>
+              <Link href="/login" className="primary-button compact-button">Googleでログイン</Link>
+            </div>
+          ) : (
+            <>
+              <div className="invite-card settings-invite-card">
+                <div>
+                  <strong>招待リンク</strong>
+                  <p>リンクかQRで共有できます。</p>
+                </div>
+                <div className="invite-actions">
                   <button
                     type="button"
                     className="ghost-button compact-button"
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(invite.url);
-                      setMessage("招待リンクをコピーしました。");
+                    disabled={isPending}
+                    onClick={() => {
+                      startTransition(async () => {
+                        try {
+                          if (!user) {
+                            throw new Error("ログインが必要です。");
+                          }
+                          const nextInvite = await createListInvite(listId, user);
+                          setInvite(nextInvite);
+                          setMessage("招待リンクを作成しました。");
+                        } catch (error) {
+                          setMessage(friendlyInviteError(error));
+                        }
+                      });
                     }}
                   >
-                    コピー
+                    リンク作成
                   </button>
-                ) : null}
+                  {invite?.url ? (
+                    <button
+                      type="button"
+                      className="ghost-button compact-button"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(invite.url);
+                        setMessage("招待リンクをコピーしました。");
+                      }}
+                    >
+                      コピー
+                    </button>
+                  ) : null}
+                </div>
+                {invite?.url ? <code className="invite-url">{invite.url}</code> : null}
+                {qrDataUrl ? <img className="invite-qr" src={qrDataUrl} alt="共有招待リンクのQRコード" /> : null}
               </div>
-              {invite?.url ? <code className="invite-url">{invite.url}</code> : null}
-              {qrDataUrl ? <img className="invite-qr" src={qrDataUrl} alt="共有招待リンクのQRコード" /> : null}
-            </div>
-            <label>
-              登録済みユーザーのメールアドレス
-              <input type="email" value={shareEmail} onChange={(event) => setShareEmail(event.target.value)} placeholder="takumi@example.com" />
-            </label>
-            <button type="submit" className="primary-button" disabled={isPending}>共有メンバーに追加</button>
-          </>
-        )}
-        <div className="member-list">
-          {snapshot.members.map((member) => (
-            <div className="member-row" key={member.id}>
-              <div>
-                <strong>{normalizeDisplayName(member.name)}</strong>
-                <p>{member.email}</p>
+              <label className="settings-field">
+                <span>Member Email</span>
+                <input type="email" value={shareEmail} onChange={(event) => setShareEmail(event.target.value)} placeholder="takumi@example.com" />
+              </label>
+              <button type="submit" className="primary-button settings-save-button" disabled={isPending}>
+                共有メンバーに追加
+              </button>
+            </>
+          )}
+          <div className="member-list settings-member-list">
+            {snapshot.members.map((member) => (
+              <div className="member-row settings-member-row" key={member.id}>
+                <div>
+                  <strong>{normalizeDisplayName(member.name)}</strong>
+                  <p>{member.email}</p>
+                </div>
+                <span className="tag">{member.role === "owner" ? "所有者" : "編集者"}</span>
               </div>
-              <span className="tag">{member.role === "owner" ? "所有者" : "編集者"}</span>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </form>
 
       {canDeleteList ? (
-        <section className="panel form-panel danger-panel">
-          <div className="compact-heading">
-            <p className="eyebrow">Delete</p>
-          </div>
+        <section className="settings-section">
+          <p className="settings-section-title">DELETE</p>
+          <div className="settings-card settings-delete-card">
           <button
             type="button"
-            className="ghost-button danger"
+            className="ghost-button danger settings-delete-button"
             disabled={isPending}
             onClick={() => {
               if (!user) {
@@ -332,8 +412,57 @@ export function ListSettingsClient({ listId }: Props) {
           >
             {isPending ? "削除中..." : "リストを削除"}
           </button>
+          </div>
         </section>
       ) : null}
     </div>
+  );
+}
+
+function BackIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 12H5" />
+      <path d="m12 19-7-7 7-7" />
+    </svg>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <path d="m8.7 10.7 6.6-4.4" />
+      <path d="m8.7 13.3 6.6 4.4" />
+    </svg>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 8v4l3 2" />
+    </svg>
+  );
+}
+
+function OpenIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 4h6v6" />
+      <path d="M10 14 20 4" />
+      <path d="M20 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4" />
+    </svg>
   );
 }

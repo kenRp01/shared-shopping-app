@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition, type Dispatch, type DragEvent, type SetStateAction } from "react";
+import { useEffect, useRef, useState, useTransition, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { DEFAULT_ITEM_FORM, DEFAULT_LIST_FORM } from "@/lib/constants";
 import {
   createList,
@@ -115,6 +115,10 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const [optimisticListId, setOptimisticListId] = useState<string | null>(null);
   const [draggingCategoryId, setDraggingCategoryId] = useState<string | null>(null);
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
+  const categoryRailRef = useRef<HTMLDivElement | null>(null);
+  const categoryCardRefs = useRef(new Map<string, HTMLDivElement>());
+  const categoryScrollTimerRef = useRef<number | null>(null);
+  const shouldScrollToActiveRef = useRef(false);
   const [, startTransition] = useTransition();
 
   async function refresh(currentUser?: UserProfile | null, options: { useCache?: boolean; listId?: string | null } = {}) {
@@ -284,7 +288,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
     return {
       id: makeId("list_pending"),
       name,
-      sortOrder: 0,
+      sortOrder: categories.length,
       description: "",
       plannedDate: null,
       visibility: "private",
@@ -346,11 +350,15 @@ export function ListDetailClient({ listId, publicToken }: Props) {
     );
   }
 
-  function switchList(nextListId: string) {
+  function switchList(
+    nextListId: string,
+    options: { history?: "push" | "replace"; scrollIntoView?: boolean } = {},
+  ) {
     if (nextListId === activeListId) {
       return;
     }
 
+    shouldScrollToActiveRef.current = options.scrollIntoView ?? true;
     const cached = user ? detailCache.get(detailCacheKey(user.id, nextListId)) : null;
     setOptimisticListId(nextListId);
     if (cached && Date.now() - cached.cachedAt < DETAIL_CACHE_TTL_MS) {
@@ -360,7 +368,47 @@ export function ListDetailClient({ listId, publicToken }: Props) {
       setIsResolvingList(false);
     }
     setActiveListId(nextListId);
-    window.history.pushState(null, "", `/lists/${nextListId}`);
+    if (options.history === "replace") {
+      window.history.replaceState(null, "", `/lists/${nextListId}`);
+    } else {
+      window.history.pushState(null, "", `/lists/${nextListId}`);
+    }
+  }
+
+  function handleCategoryScroll() {
+    if (categoryScrollTimerRef.current) {
+      window.clearTimeout(categoryScrollTimerRef.current);
+    }
+
+    categoryScrollTimerRef.current = window.setTimeout(() => {
+      const rail = categoryRailRef.current;
+      if (!rail || categories.length < 2) {
+        return;
+      }
+
+      const railRect = rail.getBoundingClientRect();
+      const railCenter = railRect.left + railRect.width / 2;
+      let nearestListId = activeListId;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+
+      for (const category of categories) {
+        const element = categoryCardRefs.current.get(category.id);
+        if (!element) {
+          continue;
+        }
+        const rect = element.getBoundingClientRect();
+        const cardCenter = rect.left + rect.width / 2;
+        const distance = Math.abs(cardCenter - railCenter);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestListId = category.id;
+        }
+      }
+
+      if (nearestListId && nearestListId !== activeListId) {
+        switchList(nearestListId, { history: "replace", scrollIntoView: false });
+      }
+    }, 120);
   }
 
   useEffect(() => {
@@ -383,6 +431,32 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   }, [activeListId, publicToken]);
 
   useEffect(() => {
+    if (!activeListId) {
+      return;
+    }
+    if (!shouldScrollToActiveRef.current) {
+      return;
+    }
+    shouldScrollToActiveRef.current = false;
+
+    window.requestAnimationFrame(() => {
+      categoryCardRefs.current.get(activeListId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "start",
+      });
+    });
+  }, [activeListId, categories.length]);
+
+  useEffect(() => {
+    return () => {
+      if (categoryScrollTimerRef.current) {
+        window.clearTimeout(categoryScrollTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!snapshot || publicToken) {
       return;
     }
@@ -391,6 +465,56 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   }, [publicToken, router, snapshot?.list.id]);
 
   const pendingItems = snapshot?.items.filter((item) => item.status === "pending") ?? [];
+  const categoryIdsKey = categories.map((category) => category.id).join("|");
+
+  useEffect(() => {
+    if (!user || publicToken || categories.length < 2) {
+      return;
+    }
+
+    let active = true;
+
+    categories.forEach((category) => {
+      const cacheKey = detailCacheKey(user.id, category.id);
+      const cached = detailCache.get(cacheKey);
+      if (cached && Date.now() - cached.cachedAt < DETAIL_CACHE_TTL_MS) {
+        return;
+      }
+
+      loadSnapshotBundle(category.id, user.id)
+        .then((bundle) => {
+          if (!active || !bundle.snapshot) {
+            return;
+          }
+          detailCache.set(cacheKey, {
+            snapshot: bundle.snapshot,
+            categories: bundle.categories ?? categories,
+            cachedAt: Date.now(),
+          });
+          setCategories((current) => [...current]);
+        })
+        .catch(() => {
+          // Preview preloading should never block the current list.
+        });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [categoryIdsKey, publicToken, user?.id]);
+
+  function getCategoryPreviewItems(categoryId: string) {
+    if (categoryId === snapshot?.list.id) {
+      return pendingItems;
+    }
+
+    if (!user) {
+      return [];
+    }
+
+    const cached = detailCache.get(detailCacheKey(user.id, categoryId));
+    return cached?.snapshot.items.filter((item) => item.status === "pending") ?? [];
+  }
 
   function parseQuickAddTitles(value: string) {
     return value
@@ -410,109 +534,247 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const activeListName = snapshot.list.name;
   const activeCategoryId = optimisticListId ?? activeListId ?? snapshot.list.id;
   const hasSharedContext = snapshot.list.visibility !== "private" || snapshot.members.some((member) => member.id !== snapshot.owner.id);
+  const canEditList = snapshot.permission === "edit" && !publicToken;
+  const renderPreviewListContent = (category: ShoppingListOverview) => {
+    const previewItems = getCategoryPreviewItems(category.id).slice(0, 6);
+    const shouldShowPreviewOwner = category.visibility !== "private";
 
-  return (
-    <div className="page-grid detail-shell">
-      {snapshot.permission === "edit" && !publicToken ? (
-        <section className="panel quick-add-panel">
-          <form
-            className="form-panel quick-add-form"
-            action={() => {
-              startTransition(async () => {
-                const currentUser = user;
-                const currentSnapshot = snapshot;
-                let optimisticIds = new Set<string>();
-                try {
-                  if (!currentUser || !currentSnapshot) {
-                    throw new Error("ログインが必要です。");
-                  }
-                  const titles = parseQuickAddTitles(form.title);
-                  if (titles.length === 0) {
-                    throw new Error("商品名を入力してください。");
-                  }
-                  const payload = form;
-                  const optimisticItems = titles.map((title, index) => makeOptimisticItem(title, payload, currentUser, index));
-                  optimisticIds = new Set(optimisticItems.map((item) => item.id));
-                  updateItemsInView((items) => [...optimisticItems, ...items]);
+    return (
+      <div className="item-list item-list-stack category-card-preview-list">
+        {previewItems.length === 0 ? <p className="empty-state">No items</p> : null}
+        {previewItems.map((item) => (
+          <span
+            key={item.id}
+            className={cn(
+              "item-row item-row-modern category-card-preview-row",
+              category.visibility !== "private" ? "item-row-shared" : "item-row-personal",
+              item.dueDate === todayKey() && "item-row-today",
+            )}
+          >
+            <span className="item-row-top">
+              <span className="item-check read-only" aria-hidden="true">
+                <span className="item-check-ui" />
+              </span>
+              <span className="item-main">
+                <span className="item-main-head">
+                  <span className="item-title">
+                    <strong>{item.title}</strong>
+                  </span>
+                  {item.quantity ? <span className="item-quantity">{item.quantity}</span> : null}
+                </span>
+                <span className="item-meta-line">
+                  {shouldShowPreviewOwner ? <span className="item-meta-text">{item.createdByName}</span> : null}
+                  {item.dueDate ? <span className="item-meta-text">{formatDate(item.dueDate)}</span> : null}
+                </span>
+              </span>
+            </span>
+          </span>
+        ))}
+        {canEditList ? <span className="list-task-add-form category-card-add-placeholder">+ Add item</span> : null}
+      </div>
+    );
+  };
+  const activeListContent = (
+    <div className="item-list item-list-stack">
+      {pendingItems.length === 0 ? <p className="empty-state">No items</p> : null}
+      {pendingItems.map((item) => (
+        <ItemRow
+          item={item}
+          key={item.id}
+          editable={snapshot.permission === "edit" && !publicToken}
+          showSharedContext={hasSharedContext}
+          dragging={draggingItemId === item.id}
+          onDragStart={() => setDraggingItemId(item.id)}
+          onDragEnd={() => setDraggingItemId(null)}
+          onDragEnter={() => {
+            if (!draggingItemId || draggingItemId === item.id || !user) {
+              return;
+            }
+            setSnapshot((current) => {
+              if (!current) {
+                return current;
+              }
+              const visiblePendingIds = new Set(pendingItems.map((entry) => entry.id));
+              const pending = current.items.filter((entry) => visiblePendingIds.has(entry.id));
+              const others = current.items.filter((entry) => !visiblePendingIds.has(entry.id));
+              const nextPending = [...pending];
+              const from = nextPending.findIndex((entry) => entry.id === draggingItemId);
+              const to = nextPending.findIndex((entry) => entry.id === item.id);
+              if (from < 0 || to < 0 || from === to) {
+                return current;
+              }
+              const [moved] = nextPending.splice(from, 1);
+              nextPending.splice(to, 0, moved);
+              return {
+                ...current,
+                items: [...nextPending, ...others],
+              };
+            });
+          }}
+          onDrop={() => {
+            if (!user) {
+              return;
+            }
+            const orderedIds = pendingItems.map((entry) => entry.id);
+            startTransition(async () => {
+              try {
+                await reorderItems(snapshot.list.id, user, orderedIds);
+                await refresh(user, { useCache: false });
+                setMessage(null);
+              } catch (error) {
+                setMessage(error instanceof Error ? error.message : "並び替えできませんでした。");
+                await refresh(user, { useCache: false });
+              } finally {
+                setDraggingItemId(null);
+              }
+            });
+          }}
+          onToggle={async () => {
+            if (!user) return;
+            removeItemFromView(item.id);
+            try {
+              await removeItem(snapshot.list.id, item.id, user);
+              await refresh(user, { useCache: false });
+            } catch (error) {
+              await refresh(user, { useCache: false });
+              setMessage(error instanceof Error ? error.message : "更新できませんでした。");
+            }
+          }}
+          onEdit={
+                snapshot.permission === "edit" && !publicToken
+                  ? async (payload) => {
+                      if (!user) return;
+                      const targetCategoryId = editCategoryId || snapshot.list.id;
+                      await updateItem(snapshot.list.id, item.id, user, payload, targetCategoryId);
+                      setEditingItemId(null);
+                      await refresh(user, { useCache: false });
+                    }
+                  : undefined
+          }
+          editing={editingItemId === item.id}
+          onStartEdit={() => {
+            setEditingItemId(item.id);
+            setEditForm({
+              title: item.title,
+              quantity: item.quantity,
+              note: item.note,
+              scope: item.scope,
+              dueDate: item.dueDate,
+              dueTime: item.dueTime,
+              remindOn: item.remindOn ?? item.dueDate,
+              reminderEnabled: item.reminderEnabled,
+            });
+            setEditCategoryId(item.listId);
+          }}
+          onCancelEdit={() => setEditingItemId(null)}
+          editForm={editForm}
+          setEditForm={setEditForm}
+          categories={categories}
+          editCategoryId={editCategoryId}
+          setEditCategoryId={setEditCategoryId}
+        />
+      ))}
+      {canEditList ? (
+        <form
+          className="list-task-add-form"
+          action={() => {
+            startTransition(async () => {
+              const currentUser = user;
+              const currentSnapshot = snapshot;
+              let optimisticIds = new Set<string>();
+              try {
+                if (!currentUser || !currentSnapshot) {
+                  throw new Error("ログインが必要です。");
+                }
+                const titles = parseQuickAddTitles(form.title);
+                if (titles.length === 0) {
+                  throw new Error("商品名を入力してください。");
+                }
+                const payload = form;
+                const optimisticItems = titles.map((title, index) => makeOptimisticItem(title, payload, currentUser, index));
+                optimisticIds = new Set(optimisticItems.map((item) => item.id));
+                updateItemsInView((items) => [...optimisticItems, ...items]);
+                updateCategoriesInView((current) =>
+                  current.map((category) =>
+                    category.id === currentSnapshot.list.id
+                      ? { ...category, pendingCount: category.pendingCount + optimisticItems.length }
+                      : category,
+                  ),
+                );
+                setForm((current) => ({
+                  ...DEFAULT_ITEM_FORM,
+                  title: "",
+                  quantity: current.quantity,
+                  scope: current.scope,
+                  dueDate: current.dueDate,
+                  dueTime: current.dueTime,
+                  remindOn: current.remindOn,
+                  reminderEnabled: current.reminderEnabled,
+                }));
+                setMessage(null);
+
+                const savedItems = await Promise.all(
+                  titles.map((title) =>
+                    createItem(currentSnapshot.list.id, currentUser, {
+                      ...payload,
+                      title,
+                    }),
+                  ),
+                );
+                const savedViews = savedItems.map((item) => toItemViewFromItem(item, currentUser));
+                updateItemsInView((items) => {
+                  const remaining = items.filter((item) => !optimisticIds.has(item.id));
+                  return [...savedViews, ...remaining];
+                });
+              } catch (error) {
+                if (optimisticIds.size > 0) {
+                  updateItemsInView((items) => items.filter((item) => !optimisticIds.has(item.id)));
                   updateCategoriesInView((current) =>
                     current.map((category) =>
                       category.id === currentSnapshot.list.id
-                        ? { ...category, pendingCount: category.pendingCount + optimisticItems.length }
+                        ? { ...category, pendingCount: Math.max(0, category.pendingCount - optimisticIds.size) }
                         : category,
                     ),
                   );
-                  setForm((current) => ({
-                    ...DEFAULT_ITEM_FORM,
-                    title: "",
-                    quantity: current.quantity,
-                    scope: current.scope,
-                    dueDate: current.dueDate,
-                    dueTime: current.dueTime,
-                    remindOn: current.remindOn,
-                    reminderEnabled: current.reminderEnabled,
-                  }));
-                  setMessage(null);
-
-                  const savedItems = await Promise.all(
-                    titles.map((title) =>
-                      createItem(currentSnapshot.list.id, currentUser, {
-                        ...payload,
-                        title,
-                      }),
-                    ),
-                  );
-                  const savedViews = savedItems.map((item) => toItemViewFromItem(item, currentUser));
-                  updateItemsInView((items) => {
-                    const remaining = items.filter((item) => !optimisticIds.has(item.id));
-                    return [...savedViews, ...remaining];
-                  });
-                } catch (error) {
-                  if (optimisticIds.size > 0) {
-                    updateItemsInView((items) => items.filter((item) => !optimisticIds.has(item.id)));
-                    updateCategoriesInView((current) =>
-                      current.map((category) =>
-                        category.id === currentSnapshot.list.id
-                          ? { ...category, pendingCount: Math.max(0, category.pendingCount - optimisticIds.size) }
-                          : category,
-                      ),
-                    );
-                  }
-                  setMessage(error instanceof Error ? error.message : "商品追加に失敗しました。");
                 }
-              });
-            }}
-          >
-            <div className="quick-add-row">
-              <div className="quick-add-title">
-                <input value={form.title} placeholder="牛乳、卵、洗剤" aria-label="商品名" onChange={(event) => setForm({ ...form, title: event.target.value })} />
-              </div>
-
-              <label className="quick-add-quantity quick-add-quantity-inline">
-                <input
-                  value={form.quantity}
-                  aria-label="数量"
-                  placeholder="1"
-                  onChange={(event) => setForm({ ...form, quantity: event.target.value })}
-                />
-              </label>
-
-              <button type="submit" className="primary-button quick-add-submit">
-                追加
-              </button>
+                setMessage(error instanceof Error ? error.message : "商品追加に失敗しました。");
+              }
+            });
+          }}
+        >
+          <div className="list-task-add-row">
+            <div className="quick-add-title">
+              <input value={form.title} placeholder="+ Add item" aria-label="商品名" onChange={(event) => setForm({ ...form, title: event.target.value })} />
             </div>
-            {message ? <p className="notice-inline">{message}</p> : null}
-          </form>
-        </section>
+          </div>
+          {message ? <p className="notice-inline">{message}</p> : null}
+        </form>
       ) : null}
+    </div>
+  );
 
-      <section className={cn("panel list-section-panel", isResolvingList && "list-section-panel-loading")}>
+  return (
+    <div className="page-grid detail-shell">
+      <section className={cn("panel list-section-panel list-board-panel list-carousel-stage", isResolvingList && "list-section-panel-loading")}>
         {categories.length ? (
           <div className="category-strip-wrap">
             <div className="category-toolbar">
-              <div className="category-strip" aria-label="カテゴリー切り替え">
-                {categories.map((category) => (
+              <div
+                ref={categoryRailRef}
+                className="category-card-rail"
+                aria-label="カテゴリー切り替え"
+                onScroll={handleCategoryScroll}
+              >
+                {categories.map((category, index) => (
                   <div
                     key={category.id}
+                    ref={(element) => {
+                      if (element) {
+                        categoryCardRefs.current.set(category.id, element);
+                      } else {
+                        categoryCardRefs.current.delete(category.id);
+                      }
+                    }}
                     className={cn(
                       "category-pill-holder",
                       draggingCategoryId === category.id && "category-pill-holder-dragging",
@@ -556,42 +818,77 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                       });
                     }}
                   >
-                    <Link
-                      href={`/lists/${category.id}`}
-                      className={cn("category-pill", category.id === activeCategoryId && "category-pill-active")}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        switchList(category.id);
-                      }}
-                    >
-                      {category.name}
-                    </Link>
+                    {category.id === activeCategoryId ? (
+                      <div
+                        className={cn(
+                          "category-card category-card-active category-card-live",
+                          `category-card-tone-${index % 5}`,
+                          category.visibility !== "private" && "category-card-shared",
+                        )}
+                        aria-label={category.name}
+                      >
+                        <div className="active-list-card-head">
+                          <h2>{activeListName}</h2>
+                          <div className="active-list-card-actions">
+                            {!publicToken ? (
+                              <Link
+                                href={`/lists/${snapshot.list.id}/settings`}
+                                className="settings-chip settings-chip-icon list-settings-header-button"
+                                aria-label={`${activeListName} の設定`}
+                                title="設定"
+                                onClick={cacheSettingsView}
+                              >
+                                <MenuIcon />
+                              </Link>
+                            ) : null}
+                          </div>
+                        </div>
+                        {activeListContent}
+                      </div>
+                    ) : (
+                      <Link
+                        href={`/lists/${category.id}`}
+                        className={cn(
+                          "category-card",
+                          `category-card-tone-${index % 5}`,
+                          category.visibility !== "private" && "category-card-shared",
+                        )}
+                        aria-label={category.name}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          switchList(category.id, { scrollIntoView: true });
+                        }}
+                      >
+                        <div className="active-list-card-head category-card-preview-head">
+                          <h2>{category.name}</h2>
+                          <span className="active-list-card-actions" aria-hidden="true">
+                            <span className="settings-chip settings-chip-icon list-settings-header-button">
+                              <MenuIcon />
+                            </span>
+                          </span>
+                        </div>
+                        {renderPreviewListContent(category)}
+                      </Link>
+                    )}
                   </div>
                 ))}
               </div>
               {!publicToken ? (
-                <div className="category-actions">
-                  {snapshot.permission === "edit" ? (
-                    <button
-                      type="button"
-                      className="category-add-button"
-                      onClick={() => setShowCategoryCreate((current) => !current)}
-                      aria-label="新しいリストを作成"
-                      title="新しいリスト"
-                    >
-                      <PlusIcon />
-                    </button>
-                  ) : null}
-                  <Link
-                    href={`/lists/${snapshot.list.id}/settings`}
-                    className="settings-chip settings-chip-icon"
-                    aria-label={`${activeListName} の設定`}
-                    title="設定"
-                    onClick={cacheSettingsView}
-                  >
-                    <GearIcon />
-                  </Link>
-                </div>
+                <>
+                  <div className={cn("category-actions", showCategoryCreate && "category-actions-hidden")}>
+                    {canEditList ? (
+                      <button
+                        type="button"
+                        className="category-add-button"
+                        onClick={() => setShowCategoryCreate((current) => !current)}
+                        aria-label="新しいリストを作成"
+                        title="新しいリスト"
+                      >
+                        <PlusIcon />
+                      </button>
+                    ) : null}
+                  </div>
+                </>
               ) : null}
             </div>
             {showCategoryCreate && snapshot.permission === "edit" && !publicToken ? (
@@ -615,7 +912,8 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                         items: [],
                         permission: "edit",
                       };
-                      const nextCategories = [optimisticOverview, ...categories];
+                      const nextCategories = [...categories, optimisticOverview];
+                      shouldScrollToActiveRef.current = true;
                       setCategories(nextCategories);
                       setSnapshot(optimisticSnapshot);
                       setActiveListId(optimisticList.id);
@@ -663,115 +961,27 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                 <input
                   value={categoryFormName}
                   placeholder="新しいリスト"
+                  aria-label="新しいリスト"
                   onChange={(event) => setCategoryFormName(event.target.value)}
                 />
-                <button type="submit" className="primary-button compact-button">
-                  作成
-                </button>
               </form>
+            ) : null}
+            {categories.length > 1 ? (
+              <div className="category-carousel-dots" aria-label="リスト切り替え">
+                {categories.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    className={cn("category-carousel-dot", category.id === activeCategoryId && "category-carousel-dot-active")}
+                    aria-label={`${category.name}へ移動`}
+                    aria-current={category.id === activeCategoryId ? "true" : undefined}
+                    onClick={() => switchList(category.id, { scrollIntoView: true })}
+                  />
+                ))}
+              </div>
             ) : null}
           </div>
         ) : null}
-        <div className="item-list item-list-stack">
-          {pendingItems.length === 0 ? <p className="empty-state">なし</p> : null}
-          {pendingItems.map((item) => (
-            <ItemRow
-              item={item}
-              key={item.id}
-              editable={snapshot.permission === "edit" && !publicToken}
-              showSharedContext={hasSharedContext}
-              dragging={draggingItemId === item.id}
-              onDragStart={() => setDraggingItemId(item.id)}
-              onDragEnd={() => setDraggingItemId(null)}
-              onDragEnter={() => {
-                if (!draggingItemId || draggingItemId === item.id || !user) {
-                  return;
-                }
-                setSnapshot((current) => {
-                  if (!current) {
-                    return current;
-                  }
-                  const visiblePendingIds = new Set(pendingItems.map((entry) => entry.id));
-                  const pending = current.items.filter((entry) => visiblePendingIds.has(entry.id));
-                  const others = current.items.filter((entry) => !visiblePendingIds.has(entry.id));
-                  const nextPending = [...pending];
-                  const from = nextPending.findIndex((entry) => entry.id === draggingItemId);
-                  const to = nextPending.findIndex((entry) => entry.id === item.id);
-                  if (from < 0 || to < 0 || from === to) {
-                    return current;
-                  }
-                  const [moved] = nextPending.splice(from, 1);
-                  nextPending.splice(to, 0, moved);
-                  return {
-                    ...current,
-                    items: [...nextPending, ...others],
-                  };
-                });
-              }}
-              onDrop={() => {
-                if (!user) {
-                  return;
-                }
-                const orderedIds = pendingItems.map((entry) => entry.id);
-                startTransition(async () => {
-                  try {
-                    await reorderItems(snapshot.list.id, user, orderedIds);
-                    await refresh(user, { useCache: false });
-                    setMessage(null);
-                  } catch (error) {
-                    setMessage(error instanceof Error ? error.message : "並び替えできませんでした。");
-                    await refresh(user, { useCache: false });
-                  } finally {
-                    setDraggingItemId(null);
-                  }
-                });
-              }}
-              onToggle={async () => {
-                if (!user) return;
-                removeItemFromView(item.id);
-                try {
-                  await removeItem(snapshot.list.id, item.id, user);
-                  await refresh(user, { useCache: false });
-                } catch (error) {
-                  await refresh(user, { useCache: false });
-                  setMessage(error instanceof Error ? error.message : "更新できませんでした。");
-                }
-              }}
-              onEdit={
-                    snapshot.permission === "edit" && !publicToken
-                      ? async (payload) => {
-                          if (!user) return;
-                          const targetCategoryId = editCategoryId || snapshot.list.id;
-                          await updateItem(snapshot.list.id, item.id, user, payload, targetCategoryId);
-                          setEditingItemId(null);
-                          await refresh(user, { useCache: false });
-                        }
-                      : undefined
-              }
-              editing={editingItemId === item.id}
-              onStartEdit={() => {
-                setEditingItemId(item.id);
-                setEditCategoryId(snapshot.list.id);
-                setEditForm({
-                  title: item.title,
-                  quantity: item.quantity,
-                  note: item.note,
-                  scope: item.scope,
-                  dueDate: item.dueDate,
-                  dueTime: item.dueTime,
-                  remindOn: item.remindOn,
-                  reminderEnabled: item.reminderEnabled,
-                });
-              }}
-              onCancelEdit={() => setEditingItemId(null)}
-              editForm={editForm}
-              setEditForm={setEditForm}
-              categories={categories}
-              editCategoryId={editCategoryId}
-              setEditCategoryId={setEditCategoryId}
-            />
-          ))}
-        </div>
       </section>
     </div>
   );
@@ -974,11 +1184,12 @@ function PlusIcon() {
   );
 }
 
-function GearIcon() {
+function MenuIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 3.75a2.25 2.25 0 0 1 2.2 1.77l.14.62a1.05 1.05 0 0 0 .89.8l.64.09a2.25 2.25 0 0 1 1.53 3.56l-.38.53a1.05 1.05 0 0 0 0 1.22l.38.53a2.25 2.25 0 0 1-1.53 3.56l-.64.09a1.05 1.05 0 0 0-.89.8l-.14.62a2.25 2.25 0 0 1-4.4 0l-.14-.62a1.05 1.05 0 0 0-.89-.8l-.64-.09a2.25 2.25 0 0 1-1.53-3.56l.38-.53a1.05 1.05 0 0 0 0-1.22l-.38-.53A2.25 2.25 0 0 1 8.75 7l.64-.09a1.05 1.05 0 0 0 .89-.8l.14-.62A2.25 2.25 0 0 1 12 3.75Z" />
-      <circle cx="12" cy="12" r="3.15" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 7h14" />
+      <path d="M5 12h14" />
+      <path d="M5 17h14" />
     </svg>
   );
 }

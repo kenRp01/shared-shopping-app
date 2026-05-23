@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { ChunkReloadGuard } from "@/components/chunk-reload-guard";
 import { Nav } from "@/components/nav";
 import "./globals.css";
@@ -11,17 +10,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ja">
+    <html lang="ja" data-theme="dark">
       <body>
         <ChunkReloadGuard />
         <div className="page-shell">
           <Nav />
           <main>{children}</main>
-          <footer className="site-footer" aria-label="フッター">
-            <Link href="/terms">利用規約</Link>
-            <Link href="/privacy">プライバシー</Link>
-            <Link href="/contact">問い合わせ</Link>
-          </footer>
         </div>
       </body>
     </html>
