@@ -117,7 +117,8 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const categoryRailRef = useRef<HTMLDivElement | null>(null);
   const categoryCardRefs = useRef(new Map<string, HTMLDivElement>());
-  const categoryScrollTimerRef = useRef<number | null>(null);
+  const categoryScrollFrameRef = useRef<number | null>(null);
+  const activeListIdRef = useRef(activeListId);
   const shouldScrollToActiveRef = useRef(false);
   const [, startTransition] = useTransition();
 
@@ -321,7 +322,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   }
 
   function cacheSettingsView() {
-    if (!user || !snapshot) {
+    if (!user || !snapshot || activeCategoryId !== snapshot.list.id) {
       return;
     }
 
@@ -354,10 +355,11 @@ export function ListDetailClient({ listId, publicToken }: Props) {
     nextListId: string,
     options: { history?: "push" | "replace"; scrollIntoView?: boolean } = {},
   ) {
-    if (nextListId === activeListId) {
+    if (nextListId === activeListIdRef.current) {
       return;
     }
 
+    activeListIdRef.current = nextListId;
     shouldScrollToActiveRef.current = options.scrollIntoView ?? true;
     const cached = user ? detailCache.get(detailCacheKey(user.id, nextListId)) : null;
     setOptimisticListId(nextListId);
@@ -376,11 +378,12 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   }
 
   function handleCategoryScroll() {
-    if (categoryScrollTimerRef.current) {
-      window.clearTimeout(categoryScrollTimerRef.current);
+    if (categoryScrollFrameRef.current) {
+      window.cancelAnimationFrame(categoryScrollFrameRef.current);
     }
 
-    categoryScrollTimerRef.current = window.setTimeout(() => {
+    categoryScrollFrameRef.current = window.requestAnimationFrame(() => {
+      categoryScrollFrameRef.current = null;
       const rail = categoryRailRef.current;
       if (!rail || categories.length < 2) {
         return;
@@ -388,7 +391,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
 
       const railRect = rail.getBoundingClientRect();
       const railCenter = railRect.left + railRect.width / 2;
-      let nearestListId = activeListId;
+      let nearestListId = activeListIdRef.current;
       let nearestDistance = Number.POSITIVE_INFINITY;
 
       for (const category of categories) {
@@ -405,20 +408,22 @@ export function ListDetailClient({ listId, publicToken }: Props) {
         }
       }
 
-      if (nearestListId && nearestListId !== activeListId) {
+      if (nearestListId && nearestListId !== activeListIdRef.current) {
         switchList(nearestListId, { history: "replace", scrollIntoView: false });
       }
-    }, 120);
+    });
   }
 
   useEffect(() => {
     setActiveListId(listId);
+    activeListIdRef.current = listId;
   }, [listId]);
 
   useEffect(() => {
     const handlePopState = () => {
       const nextListId = window.location.pathname.match(/^\/lists\/([^/]+)/)?.[1];
       if (nextListId) {
+        activeListIdRef.current = nextListId;
         setActiveListId(nextListId);
       }
     };
@@ -450,8 +455,8 @@ export function ListDetailClient({ listId, publicToken }: Props) {
 
   useEffect(() => {
     return () => {
-      if (categoryScrollTimerRef.current) {
-        window.clearTimeout(categoryScrollTimerRef.current);
+      if (categoryScrollFrameRef.current) {
+        window.cancelAnimationFrame(categoryScrollFrameRef.current);
       }
     };
   }, []);
@@ -531,7 +536,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
     );
   }
 
-  const activeListName = snapshot.list.name;
   const activeCategoryId = optimisticListId ?? activeListId ?? snapshot.list.id;
   const hasSharedContext = snapshot.list.visibility !== "private" || snapshot.members.some((member) => member.id !== snapshot.owner.id);
   const canEditList = snapshot.permission === "edit" && !publicToken;
@@ -828,22 +832,20 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                         aria-label={category.name}
                       >
                         <div className="active-list-card-head">
-                          <h2>{activeListName}</h2>
-                          <div className="active-list-card-actions">
-                            {!publicToken ? (
-                              <Link
-                                href={`/lists/${snapshot.list.id}/settings`}
-                                className="settings-chip settings-chip-icon list-settings-header-button"
-                                aria-label={`${activeListName} の設定`}
-                                title="設定"
-                                onClick={cacheSettingsView}
-                              >
-                                <MenuIcon />
-                              </Link>
-                            ) : null}
-                          </div>
+                          <h2>{category.name}</h2>
+                          {!publicToken ? (
+                            <Link
+                              href={`/lists/${category.id}/settings`}
+                              className="settings-chip settings-chip-icon list-card-settings-button"
+                              aria-label="現在のリスト設定"
+                              title="設定"
+                              onClick={cacheSettingsView}
+                            >
+                              <MenuIcon />
+                            </Link>
+                          ) : null}
                         </div>
-                        {activeListContent}
+                        {category.id === snapshot.list.id ? activeListContent : renderPreviewListContent(category)}
                       </div>
                     ) : (
                       <Link
@@ -861,11 +863,6 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                       >
                         <div className="active-list-card-head category-card-preview-head">
                           <h2>{category.name}</h2>
-                          <span className="active-list-card-actions" aria-hidden="true">
-                            <span className="settings-chip settings-chip-icon list-settings-header-button">
-                              <MenuIcon />
-                            </span>
-                          </span>
                         </div>
                         {renderPreviewListContent(category)}
                       </Link>

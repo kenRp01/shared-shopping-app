@@ -11,6 +11,8 @@ type Props = {
   listId: string;
 };
 
+type AppTheme = "dark" | "light";
+
 type SettingsCache = {
   user: UserProfile;
   snapshot: ShoppingListSnapshot;
@@ -20,6 +22,7 @@ type SettingsCache = {
 
 const SETTINGS_CACHE_KEY = "shareshopi:settings-list";
 const SETTINGS_CACHE_TTL_MS = 1000 * 60 * 3;
+const THEME_STORAGE_KEY = "shareshopi:theme";
 
 function consumeSettingsCache(listId: string): SettingsCache | null {
   if (typeof window === "undefined") {
@@ -66,14 +69,24 @@ export function ListSettingsClient({ listId }: Props) {
   const [origin, setOrigin] = useState("");
   const [profileName, setProfileName] = useState(normalizeDisplayName(initialCache?.user.name ?? ""));
   const [message, setMessage] = useState<string | null>(null);
+  const [theme, setTheme] = useState<AppTheme>("dark");
+  const [isLoading, setIsLoading] = useState(!initialCache?.snapshot);
   const [isPending, startTransition] = useTransition();
 
   async function refresh(currentUser?: UserProfile | null) {
-    const nextUser = currentUser ?? (await getCurrentUser());
-    setUser(nextUser);
-    setProfileName(normalizeDisplayName(nextUser?.name ?? ""));
-    if (nextUser) {
-      setSnapshot(await getListSettingsSnapshot(listId, nextUser.id));
+    try {
+      const nextUser = currentUser ?? (await getCurrentUser());
+      setUser(nextUser);
+      setProfileName(normalizeDisplayName(nextUser?.name ?? ""));
+      if (nextUser) {
+        setSnapshot(await getListSettingsSnapshot(listId, nextUser.id));
+      } else {
+        setSnapshot(null);
+      }
+    } catch {
+      setSnapshot(null);
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -87,6 +100,22 @@ export function ListSettingsClient({ listId }: Props) {
   useEffect(() => {
     setOrigin(window.location.origin);
   }, []);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    const nextTheme: AppTheme = savedTheme === "light" ? "light" : "dark";
+    setTheme(nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
+  }, []);
+
+  function toggleTheme() {
+    setTheme((current) => {
+      const nextTheme: AppTheme = current === "dark" ? "light" : "dark";
+      localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+      document.documentElement.dataset.theme = nextTheme;
+      return nextTheme;
+    });
+  }
 
   useEffect(() => {
     let active = true;
@@ -150,11 +179,63 @@ export function ListSettingsClient({ listId }: Props) {
     };
   }, [publicUrl]);
 
+  if (isLoading) {
+    return (
+      <div className="page-grid settings-shell">
+        <section className="settings-appbar" aria-label="設定ヘッダー">
+          <Link href="/" className="settings-back-link" aria-label="トップへ戻る">
+            <BackIcon />
+          </Link>
+          <div>
+            <h2>Settings</h2>
+            <p>読み込み中</p>
+          </div>
+          <button
+            type="button"
+            className="settings-theme-button"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "ライトモードに切り替え" : "ダークモードに切り替え"}
+            title={theme === "dark" ? "ライトモード" : "ダークモード"}
+          >
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </button>
+        </section>
+        <section className="settings-card settings-status-card" aria-live="polite">
+          <strong>設定を読み込んでいます</strong>
+        </section>
+      </div>
+    );
+  }
+
   if (!snapshot || snapshot.permission !== "edit") {
     return (
-      <section className="panel">
-        <h2>表示できません</h2>
-      </section>
+      <div className="page-grid settings-shell">
+        <section className="settings-appbar" aria-label="設定ヘッダー">
+          <Link href="/" className="settings-back-link" aria-label="トップへ戻る">
+            <BackIcon />
+          </Link>
+          <div>
+            <h2>Settings</h2>
+            <p>開けません</p>
+          </div>
+          <button
+            type="button"
+            className="settings-theme-button"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "ライトモードに切り替え" : "ダークモードに切り替え"}
+            title={theme === "dark" ? "ライトモード" : "ダークモード"}
+          >
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </button>
+        </section>
+        <section className="settings-card settings-status-card">
+          <strong>このリストの設定を開けません</strong>
+          <p>ログイン状態や共有権限を確認してください。</p>
+          <Link href="/login" className="primary-button compact-button">
+            ログインする
+          </Link>
+        </section>
+      </div>
     );
   }
 
@@ -171,6 +252,15 @@ export function ListSettingsClient({ listId }: Props) {
           <h2>Settings</h2>
           <p>{snapshot.list.name}</p>
         </div>
+        <button
+          type="button"
+          className="settings-theme-button"
+          onClick={toggleTheme}
+          aria-label={theme === "dark" ? "ライトモードに切り替え" : "ダークモードに切り替え"}
+          title={theme === "dark" ? "ライトモード" : "ダークモード"}
+        >
+          {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+        </button>
       </section>
 
       {message ? <p className="settings-notice">{message}</p> : null}
@@ -374,7 +464,10 @@ export function ListSettingsClient({ listId }: Props) {
                   <strong>{normalizeDisplayName(member.name)}</strong>
                   <p>{member.email}</p>
                 </div>
-                <span className="tag">{member.role === "owner" ? "所有者" : "編集者"}</span>
+                <span className="tag settings-role-tag">
+                  <span>Role</span>
+                  {member.role === "owner" ? "所有者" : "編集者"}
+                </span>
               </div>
             ))}
           </div>
@@ -424,6 +517,30 @@ function BackIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
       <path d="M19 12H5" />
       <path d="m12 19-7-7 7-7" />
+    </svg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2" />
+      <path d="M12 20v2" />
+      <path d="m4.93 4.93 1.41 1.41" />
+      <path d="m17.66 17.66 1.41 1.41" />
+      <path d="M2 12h2" />
+      <path d="M20 12h2" />
+      <path d="m6.34 17.66-1.41 1.41" />
+      <path d="m19.07 4.93-1.41 1.41" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.4 14.3A8.6 8.6 0 0 1 9.7 3.6a7.5 7.5 0 1 0 10.7 10.7Z" />
     </svg>
   );
 }

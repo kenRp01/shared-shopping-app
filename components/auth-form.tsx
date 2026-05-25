@@ -19,19 +19,6 @@ export function AuthForm() {
 
   return (
     <div className="auth-layout">
-      <section className="panel hero-panel">
-        <p className="eyebrow">Google Login</p>
-        <h2>Googleアカウントで共有リストを使う</h2>
-        <p className="lead-copy">
-          共有リストはGoogleログインで安全に管理します。個人利用はログインなしでも続けられます。
-        </p>
-        <div className="mini-metrics">
-          <div><strong>無料</strong><span>Supabase Auth</span></div>
-          <div><strong>共有</strong><span>Googleユーザー指定</span></div>
-          <div><strong>個人</strong><span>ログイン不要</span></div>
-        </div>
-      </section>
-
       <section className="panel auth-card">
         <div className="compact-heading">
           <p className="eyebrow">Sign in</p>
@@ -65,12 +52,17 @@ export function AuthForm() {
             const formData = new FormData(event.currentTarget);
             const email = String(formData.get("email") ?? "");
             const password = String(formData.get("password") ?? "");
+            const passwordConfirmation = String(formData.get("passwordConfirmation") ?? "");
             const name = String(formData.get("name") ?? "");
 
             startTransition(async () => {
               try {
                 setMessage(null);
                 if (mode === "signup") {
+                  if (password !== passwordConfirmation) {
+                    setMessage("確認用パスワードが一致しません。");
+                    return;
+                  }
                   const result = await signUpWithEmail({ email, password, name });
                   if (result.needsConfirmation) {
                     setMessage("確認メールを送信しました。メール内のリンクからログインを完了してください。");
@@ -94,7 +86,7 @@ export function AuthForm() {
               disabled={isDisabled}
               onClick={() => setMode("login")}
             >
-              メールログイン
+              ログイン
             </button>
             <button
               type="button"
@@ -119,8 +111,19 @@ export function AuthForm() {
             required
             disabled={isDisabled}
           />
+          {mode === "signup" ? (
+            <input
+              name="passwordConfirmation"
+              type="password"
+              placeholder="パスワード確認"
+              autoComplete="new-password"
+              minLength={8}
+              required
+              disabled={isDisabled}
+            />
+          ) : null}
           <button type="submit" className="ghost-button email-auth-submit" disabled={isDisabled}>
-            {!isReady ? "準備中..." : isPending ? "処理中..." : mode === "signup" ? "メールで登録" : "メールでログイン"}
+            {!isReady ? "準備中..." : isPending ? "処理中..." : mode === "signup" ? "登録" : "メールでログイン"}
           </button>
         </form>
         {message ? <p className="notice-inline">{message}</p> : null}
