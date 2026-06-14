@@ -24,6 +24,24 @@ test.describe("Guest shopping list", () => {
 
     await expect(page.locator(".landing-hero")).toHaveCount(0);
     await expect(page.locator(".redirect-loader")).toBeVisible();
+    const loaderShell = await page.locator(".redirect-shell").evaluate((node) => {
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return {
+        position: style.position,
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      };
+    });
+    expect(loaderShell.position).toBe("fixed");
+    expect(loaderShell.top).toBe(0);
+    expect(loaderShell.left).toBe(0);
+    expect(loaderShell.width).toBe(loaderShell.viewportWidth);
+    expect(loaderShell.height).toBeGreaterThanOrEqual(loaderShell.viewportHeight);
     await expect(page).toHaveURL(/\/lists\/list_/, { timeout: 20_000 });
   });
 

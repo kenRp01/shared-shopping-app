@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/logo";
 import { getCurrentUser, signOutLocal } from "@/lib/local-store";
@@ -10,8 +11,10 @@ const THEME_STORAGE_KEY = "shareshopi:theme";
 type AppTheme = "dark" | "light";
 
 export function Nav() {
+  const router = useRouter();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [theme, setTheme] = useState<AppTheme>("dark");
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   useEffect(() => {
     const loadUser = () => {
@@ -68,11 +71,18 @@ export function Nav() {
               type="button"
               className="ghost-button nav-icon-link"
               onClick={async () => {
-                await signOutLocal();
-                window.location.href = "/";
+                setIsSigningOut(true);
+                try {
+                  await signOutLocal();
+                  router.replace("/");
+                  router.refresh();
+                } catch {
+                  setIsSigningOut(false);
+                }
               }}
               aria-label="ログアウト"
               title="ログアウト"
+              disabled={isSigningOut}
             >
               <LogoutIcon />
             </button>
@@ -85,6 +95,11 @@ export function Nav() {
           </>
         )}
       </nav>
+      {isSigningOut ? (
+        <div className="app-transition-screen" aria-busy="true" aria-live="polite">
+          <div className="redirect-loader" aria-label="ログアウトしています" role="status" />
+        </div>
+      ) : null}
     </header>
   );
 }

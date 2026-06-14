@@ -366,8 +366,26 @@ main {
 }
 
 .redirect-shell {
-  min-height: min(72vh, 680px);
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  width: 100%;
+  min-height: 100dvh;
   place-items: center;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(92, 170, 250, 0.16), transparent 28%),
+    var(--page-bg);
+}
+
+.app-transition-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(92, 170, 250, 0.16), transparent 28%),
+    var(--page-bg);
 }
 
 .redirect-loader {
