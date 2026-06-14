@@ -14,6 +14,19 @@ async function openGuestList(page: Page) {
 }
 
 test.describe("Guest shopping list", () => {
+  test("uses the neutral redirect loader before opening the first list", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("shareshopi:theme", "dark");
+      document.documentElement.dataset.theme = "dark";
+    });
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+
+    await expect(page.locator(".landing-hero")).toHaveCount(0);
+    await expect(page.locator(".redirect-loader")).toBeVisible();
+    await expect(page).toHaveURL(/\/lists\/list_/, { timeout: 20_000 });
+  });
+
   test("keeps the carousel layout during the first resolving paint", async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem("shareshopi:theme", "dark");

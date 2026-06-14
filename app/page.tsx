@@ -79,8 +79,8 @@ export default function HomePage() {
 
   if (!error) {
     return (
-      <div className="page-grid redirect-shell">
-        <section className="panel landing-hero landing-hero-compact" aria-busy="true" />
+      <div className="page-grid redirect-shell" aria-busy="true" aria-live="polite">
+        <div className="redirect-loader" aria-label="リストを開いています" role="status" />
       </div>
     );
   }

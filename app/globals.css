@@ -365,6 +365,31 @@ main {
   gap: 16px;
 }
 
+.redirect-shell {
+  min-height: min(72vh, 680px);
+  place-items: center;
+}
+
+.redirect-loader {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 3px solid rgba(92, 170, 250, 0.22);
+  border-top-color: var(--card-blue-strong);
+  animation: redirect-loader-spin 760ms linear infinite;
+}
+
+html[data-theme="light"] .redirect-loader {
+  border-color: rgba(18, 51, 39, 0.14);
+  border-top-color: #2f8f73;
+}
+
+@keyframes redirect-loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .hero-copy {
   display: grid;
   gap: 10px;
