@@ -110,7 +110,10 @@ npm run cf:preview
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "cf:heartbeat:dev": "wrangler dev --config wrangler.heartbeat.jsonc",
+    "cf:heartbeat:deploy": "wrangler deploy --config wrangler.heartbeat.jsonc",
+    "cf:heartbeat:secret": "wrangler secret put CRON_SECRET --config wrangler.heartbeat.jsonc"
   }
 }
 ```
@@ -201,7 +204,25 @@ Google Cloud:
 - Authorized JavaScript origins: `https://<cloudflare-url>`
 - Authorized redirect URIs: `https://oguntadofgerjwfeqxok.supabase.co/auth/v1/callback`
 
-### 5. Cloudflare Cron Triggerへ移行する
+### 5. Cloudflare heartbeat Workerを設定する
+
+Supabase Free の pause 対策は、OpenNext本体とは別の小さな Worker で実行します。`wrangler.heartbeat.jsonc` が専用設定です。
+
+Cloudflare Dashboard の `Workers & Pages > shareshopi-heartbeat > Settings > Variables and Secrets` で以下を設定します。
+
+- `APP_ORIGIN`: 現在の本番URL。例: `https://shareshopi.vercel.app`
+- `CRON_SECRET`: ShareShopi本体と同じ値。
+
+デプロイ:
+
+```bash
+npm run cf:heartbeat:secret
+npm run cf:heartbeat:deploy
+```
+
+Cronは `0 0 * * 1` で週1回実行します。
+
+### 6. Cloudflare Cron Triggerへ移行する
 
 Vercel Cron の代替として、Cloudflare Workers Cron Triggers で `GET /api/reminders/digest` と `GET /api/heartbeat` 相当を実行します。
 
@@ -211,13 +232,13 @@ Vercel Cron の代替として、Cloudflare Workers Cron Triggers で `GET /api/
 - Workers Cronから同じ処理を呼び出すため、必要に応じてリマインド送信処理と heartbeat 処理を共通関数へ切り出します。
 - `CRON_SECRET` による保護はHTTP実行時に引き続き使います。
 
-### 6. Cloudflareへデプロイする
+### 7. Cloudflareへデプロイする
 
 ```bash
 npm run cf:deploy
 ```
 
-### 7. DNSを切り替える
+### 8. DNSを切り替える
 
 - 独自ドメインをCloudflare Workersに紐付ける。
 - Supabase Redirect URLs と Google OAuth origins に独自ドメインを追加する。
