@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 import { buildReminderDigest } from "@/lib/reminders";
 import { createSupabaseAdminClient } from "@/lib/supabase";
 import type { ReminderDigest, ShoppingItemView, ShoppingListSnapshot, UserProfile } from "@/lib/types";
@@ -59,21 +60,6 @@ type ReminderProfileRow = {
   name: string;
   created_at: string;
 };
-
-function isAuthorizedCron(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return process.env.NODE_ENV !== "production";
-  }
-
-  const url = new URL(request.url);
-  const auth = request.headers.get("authorization");
-  return (
-    auth === `Bearer ${secret}` ||
-    request.headers.get("x-cron-secret") === secret ||
-    url.searchParams.get("secret") === secret
-  );
-}
 
 function toProfile(row: ReminderProfileRow): UserProfile {
   return {
@@ -218,7 +204,7 @@ async function sendWithResend(payload: ResendPayload) {
 }
 
 export async function GET(request: Request) {
-  if (!isAuthorizedCron(request)) {
+  if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -374,7 +360,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!isAuthorizedCron(request)) {
+  if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

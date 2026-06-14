@@ -16,8 +16,10 @@
 ## リマインド
 
 - Vercel Cron が `GET /api/reminders/digest` を毎日実行します。
+- Supabase Free の一時停止対策として、Vercel Cron が `GET /api/heartbeat` を週1回実行します。
 - `CRON_SECRET` が設定されている場合、Vercel Cron は `Authorization: Bearer <CRON_SECRET>` を送ります。
 - 手動確認は `GET /api/reminders/digest?dryRun=1` を使います。
+- heartbeat の手動確認は `GET /api/heartbeat` を使います。
 - 同じ `list_id` と `delivery_date` の送信は `reminder_delivery_logs` で二重送信を防ぎます。
 
 ## デプロイ

@@ -203,12 +203,12 @@ Google Cloud:
 
 ### 5. Cloudflare Cron Triggerへ移行する
 
-Vercel Cron の代替として、Cloudflare Workers Cron Triggers で `GET /api/reminders/digest` 相当を実行します。
+Vercel Cron の代替として、Cloudflare Workers Cron Triggers で `GET /api/reminders/digest` と `GET /api/heartbeat` 相当を実行します。
 
 注意点:
 
 - 現在のAPIはHTTPリクエスト前提です。
-- Workers Cronから同じ処理を呼び出すため、必要に応じてリマインド送信処理を共通関数へ切り出します。
+- Workers Cronから同じ処理を呼び出すため、必要に応じてリマインド送信処理と heartbeat 処理を共通関数へ切り出します。
 - `CRON_SECRET` による保護はHTTP実行時に引き続き使います。
 
 ### 6. Cloudflareへデプロイする
