@@ -6,7 +6,9 @@ const snapshot: ShoppingListSnapshot = {
   list: {
     id: "list_1",
     name: "買い物",
+    sortOrder: 0,
     description: "",
+    plannedDate: null,
     visibility: "shared",
     ownerUserId: "user_1",
     publicToken: null,
@@ -35,6 +37,7 @@ const snapshot: ShoppingListSnapshot = {
     {
       id: "today",
       listId: "list_1",
+      sortOrder: 0,
       title: "牛乳",
       quantity: "1本",
       note: "",
@@ -58,6 +61,7 @@ const snapshot: ShoppingListSnapshot = {
     {
       id: "overdue",
       listId: "list_1",
+      sortOrder: 1,
       title: "卵",
       quantity: "1パック",
       note: "",
@@ -81,6 +85,7 @@ const snapshot: ShoppingListSnapshot = {
     {
       id: "done",
       listId: "list_1",
+      sortOrder: 2,
       title: "パン",
       quantity: "1袋",
       note: "",

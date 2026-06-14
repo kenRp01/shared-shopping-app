@@ -14,6 +14,18 @@ async function openGuestList(page: Page) {
 }
 
 test.describe("Guest shopping list", () => {
+  test("keeps the carousel layout during the first resolving paint", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("shareshopi:theme", "dark");
+      document.documentElement.dataset.theme = "dark";
+    });
+
+    await page.goto("/lists/list_first_paint_check", { waitUntil: "domcontentloaded" });
+
+    await expect(page.locator(".list-carousel-stage")).toBeVisible();
+    await expect(page.locator(".page-grid.detail-shell > .panel.list-section-panel:not(.list-carousel-stage)")).toHaveCount(0);
+  });
+
   test("opens a guest list, adds an item, and removes it by checkbox", async ({ page }) => {
     const itemName = `E2E牛乳${Date.now()}`;
 

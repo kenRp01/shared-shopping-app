@@ -531,7 +531,26 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   if (!snapshot) {
     return (
       <div className="page-grid detail-shell">
-        <section className="panel list-section-panel" aria-busy={isResolvingList} />
+        <section className="panel list-section-panel list-board-panel list-carousel-stage list-section-panel-loading" aria-busy={isResolvingList}>
+          <div className="category-strip-wrap">
+            <div className="category-toolbar">
+              <div className="category-card-rail" aria-label="カテゴリー切り替え">
+                <div className="category-pill-holder">
+                  <div className="category-card category-card-active category-card-live category-card-tone-0 category-card-skeleton" aria-hidden="true">
+                    <div className="active-list-card-head">
+                      <span className="category-card-skeleton-title" />
+                      <span className="settings-chip settings-chip-icon list-card-settings-button category-card-skeleton-icon" />
+                    </div>
+                    <div className="item-list item-list-stack">
+                      <span className="item-row item-row-modern category-card-preview-row category-card-skeleton-row" />
+                      <span className="list-task-add-form category-card-add-placeholder category-card-skeleton-add" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     );
   }

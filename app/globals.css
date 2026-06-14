@@ -2783,6 +2783,40 @@ main {
   transform: none;
 }
 
+.list-carousel-stage .category-card-skeleton {
+  pointer-events: none;
+}
+
+.list-carousel-stage .category-card-skeleton-title {
+  display: block;
+  width: min(58%, 210px);
+  height: 1em;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.list-carousel-stage .category-card-skeleton-icon {
+  opacity: 0.55;
+}
+
+.list-carousel-stage .category-card-skeleton-row {
+  min-height: 74px;
+}
+
+.list-carousel-stage .category-card-skeleton-add::before,
+.list-carousel-stage .category-card-skeleton-row::before {
+  content: "";
+  display: block;
+  width: min(56%, 180px);
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.list-carousel-stage .category-card-skeleton-add::before {
+  width: min(46%, 150px);
+}
+
 .list-carousel-stage .category-card-tone-0 {
   background:
     radial-gradient(circle at 78% 12%, rgba(255, 255, 255, 0.2), transparent 30%),
