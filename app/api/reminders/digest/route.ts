@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAuthorizedCronRequest } from "@/lib/cron-auth";
+import { getD1Database, getD1ReminderLists, getD1ReminderLog, getD1ReminderSnapshot, upsertD1ReminderLog } from "@/lib/d1";
 import { buildReminderDigest } from "@/lib/reminders";
-import { createSupabaseAdminClient } from "@/lib/supabase";
 import type { ReminderDigest, ShoppingItemView, ShoppingListSnapshot, UserProfile } from "@/lib/types";
 import { formatRelativeDue, todayKey } from "@/lib/utils";
 
@@ -208,155 +208,85 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const admin = createSupabaseAdminClient();
-  if (!admin) {
-    return NextResponse.json({ error: "Supabase の管理キーが設定されていません。" }, { status: 500 });
-  }
-
   const url = new URL(request.url);
   const dryRun = url.searchParams.get("dryRun") === "1" || url.searchParams.get("dryRun") === "true";
   const deliveryDate = url.searchParams.get("date") ?? todayKey();
 
-  const { data: lists, error: listError } = await admin
-    .from("shopping_lists")
-    .select("*")
-    .eq("daily_reminder_enabled", true);
+  const d1 = await getD1Database();
+  if (d1) {
+    const listRows = await getD1ReminderLists(d1);
+    const digests: ReminderDigest[] = [];
+    let skipped = 0;
+    let alreadySent = 0;
 
-  if (listError) {
-    return NextResponse.json({ error: listError.message }, { status: 500 });
-  }
-
-  const listRows = (lists ?? []) as ReminderListRow[];
-  const digests: ReminderDigest[] = [];
-  let skipped = 0;
-  let alreadySent = 0;
-
-  for (const list of listRows) {
-    const { data: existingLog, error: logLookupError } = await admin
-      .from("reminder_delivery_logs")
-      .select("id,status")
-      .eq("list_id", list.id)
-      .eq("delivery_date", deliveryDate)
-      .maybeSingle();
-
-    if (logLookupError) {
-      return NextResponse.json({ error: logLookupError.message }, { status: 500 });
-    }
-    if (existingLog) {
-      alreadySent += 1;
-      continue;
-    }
-
-    const [membersResult, itemsResult] = await Promise.all([
-      admin.from("shopping_list_members").select("*").eq("list_id", list.id),
-      admin
-        .from("shopping_items")
-        .select("*")
-        .eq("list_id", list.id)
-        .eq("status", "pending")
-        .eq("scope", "shared")
-        .eq("reminder_enabled", true)
-        .or(`remind_on.lte.${deliveryDate},and(remind_on.is.null,due_date.lte.${deliveryDate})`),
-    ]);
-
-    if (membersResult.error || itemsResult.error) {
-      return NextResponse.json(
-        { error: membersResult.error?.message || itemsResult.error?.message || "リマインド対象を取得できませんでした。" },
-        { status: 500 },
-      );
-    }
-
-    const memberRows = (membersResult.data ?? []) as ReminderMemberRow[];
-    const profileIds = [
-      ...new Set([
-        list.owner_user_id,
-        ...memberRows.map((member) => member.user_id),
-        ...(((itemsResult.data ?? []) as ReminderItemRow[]).flatMap((item) => [
-          item.created_by_user_id,
-          item.updated_by_user_id,
-          item.purchased_by_user_id,
-        ]).filter(Boolean) as string[]),
-      ]),
-    ];
-
-    const { data: profiles, error: profileError } = profileIds.length
-      ? await admin.from("profiles").select("*").in("id", profileIds)
-      : { data: [], error: null };
-
-    if (profileError) {
-      return NextResponse.json({ error: profileError.message }, { status: 500 });
-    }
-
-    const snapshot = toSnapshot(list, memberRows, (itemsResult.data ?? []) as ReminderItemRow[], (profiles ?? []) as ReminderProfileRow[], deliveryDate);
-    if (!snapshot) {
-      skipped += 1;
-      continue;
-    }
-
-    const recipients = [
-      ...new Map(
-        [snapshot.owner, ...snapshot.members]
-          .filter((profile) => Boolean(profile.email))
-          .map((profile) => [profile.email.toLowerCase(), profile]),
-      ).values(),
-    ];
-    const digest = buildReminderDigest(snapshot, recipients, deliveryDate);
-    if (!hasReminderTargets(digest)) {
-      skipped += 1;
-      if (!dryRun) {
-        await admin.from("reminder_delivery_logs").upsert({
-          list_id: list.id,
-          delivery_date: deliveryDate,
-          status: "skipped",
-          sent_count: 0,
-        });
+    for (const list of listRows) {
+      const existingLog = await getD1ReminderLog(d1, list.id, deliveryDate);
+      if (existingLog) {
+        alreadySent += 1;
+        continue;
       }
-      continue;
+
+      const { members, items, profiles } = await getD1ReminderSnapshot(d1, list, deliveryDate);
+      const snapshot = toSnapshot(list, members, items, profiles, deliveryDate);
+      if (!snapshot) {
+        skipped += 1;
+        continue;
+      }
+
+      const recipients = [
+        ...new Map(
+          [snapshot.owner, ...snapshot.members]
+            .filter((profile) => Boolean(profile.email))
+            .map((profile) => [profile.email.toLowerCase(), profile]),
+        ).values(),
+      ];
+      const digest = buildReminderDigest(snapshot, recipients, deliveryDate);
+      if (!hasReminderTargets(digest)) {
+        skipped += 1;
+        if (!dryRun) {
+          await upsertD1ReminderLog(d1, list.id, deliveryDate, "skipped", 0);
+        }
+        continue;
+      }
+
+      digests.push(digest);
     }
 
-    digests.push(digest);
-  }
+    if (dryRun || !process.env.RESEND_API_KEY || !process.env.REMINDER_FROM_EMAIL) {
+      return NextResponse.json({
+        ok: true,
+        dryRun: true,
+        sent: 0,
+        skipped,
+        alreadySent,
+        preview: digests.map((digest) => ({
+          listId: digest.listId,
+          recipients: digest.recipients,
+          dueToday: digest.itemGroup.dueToday.length,
+          overdue: digest.itemGroup.overdue.length,
+        })),
+      });
+    }
 
-  if (dryRun || !process.env.RESEND_API_KEY || !process.env.REMINDER_FROM_EMAIL) {
-    return NextResponse.json({
-      ok: true,
-      dryRun: true,
-      sent: 0,
-      skipped,
-      alreadySent,
-      preview: digests.map((digest) => ({
-        listId: digest.listId,
-        recipients: digest.recipients,
-        dueToday: digest.itemGroup.dueToday.length,
-        overdue: digest.itemGroup.overdue.length,
-      })),
-    });
-  }
-
-  await Promise.all(
-    digests.map((digest) =>
-      sendWithResend({
-        from: process.env.REMINDER_FROM_EMAIL as string,
-        to: digest.recipients,
-        subject: `【買い物リマインド】${digest.listName}`,
-        html: renderDigest(digest),
-      }),
-    ),
-  );
-
-  if (digests.length) {
-    await admin.from("reminder_delivery_logs").upsert(
-      digests.map((digest) => ({
-        list_id: digest.listId,
-        delivery_date: deliveryDate,
-        status: "sent",
-        sent_count: digest.recipients.length,
-      })),
-      { onConflict: "list_id,delivery_date" },
+    await Promise.all(
+      digests.map((digest) =>
+        sendWithResend({
+          from: process.env.REMINDER_FROM_EMAIL as string,
+          to: digest.recipients,
+          subject: `【買い物リマインド】${digest.listName}`,
+          html: renderDigest(digest),
+        }),
+      ),
     );
+
+    await Promise.all(
+      digests.map((digest) => upsertD1ReminderLog(d1, digest.listId, deliveryDate, "sent", digest.recipients.length)),
+    );
+
+    return NextResponse.json({ ok: true, sent: digests.length, skipped, alreadySent });
   }
 
-  return NextResponse.json({ ok: true, sent: digests.length, skipped, alreadySent });
+  return NextResponse.json({ error: "D1データベースに接続できません。" }, { status: 500 });
 }
 
 export async function POST(request: Request) {

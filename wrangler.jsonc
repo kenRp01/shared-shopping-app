@@ -3,6 +3,7 @@
 	"main": ".open-next/worker.js",
 	"name": "shareshopi",
 	"compatibility_date": "2026-06-09",
+	"keep_vars": true,
 	"compatibility_flags": [
 		"nodejs_compat",
 		"global_fetch_strictly_public"
@@ -23,5 +24,13 @@
 		// Enable image optimization
 		// see https://opennext.js.org/cloudflare/howtos/image
 		"binding": "IMAGES"
-	}
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "shareshopi-prod",
+			"database_id": "57f74465-9b47-4c06-a0a3-481eb492c432",
+			"migrations_dir": "migrations"
+		}
+	]
 }

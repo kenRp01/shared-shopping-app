@@ -45,23 +45,14 @@ test.describe("Google authentication entry", () => {
     await expect(page.getByRole("button", { name: "登録", exact: true })).toBeVisible();
   });
 
-  test("starts Google OAuth with the app callback URL", async ({ page }) => {
+  test("starts Google OAuth in a Firebase popup", async ({ page }) => {
     await page.goto("/login");
-    const appOrigin = new URL(page.url()).origin;
-
+    const popupPromise = page.waitForEvent("popup");
     await page.getByRole("button", { name: "Googleでログイン" }).click();
+    const popup = await popupPromise;
 
-    await expect(page).toHaveURL(/accounts\.google\.com|oguntadofgerjwfeqxok\.supabase\.co/, {
-      timeout: 20_000,
-    });
-
-    const loginUrl = new URL(page.url());
-    const oauthUrl = page.url();
-
-    expect(loginUrl.hostname).toMatch(/accounts\.google\.com|oguntadofgerjwfeqxok\.supabase\.co/);
-    expect(oauthUrl).toContain(encodeURIComponent("https://oguntadofgerjwfeqxok.supabase.co/auth/v1/callback"));
-    expect(oauthUrl).toContain(
-      encodeURIComponent(encodeURIComponent(`?redirect_to=${encodeURIComponent(`${appOrigin}/auth/callback`)}`)),
-    );
+    await popup.waitForLoadState("domcontentloaded");
+    expect(new URL(popup.url()).hostname).toMatch(/accounts\.google\.com|firebaseapp\.com/);
+    await expect(page).toHaveURL(/\/login$/);
   });
 });

@@ -2,8 +2,17 @@
 
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { DEFAULT_ITEM_FORM, DEFAULT_LIST_FORM, DEFAULT_STARTER_LISTS } from "@/lib/constants";
+import {
+  getFirebaseIdToken,
+  getFirebaseUser,
+  hasFirebaseEnv,
+  signInFirebaseWithEmail,
+  signInFirebaseWithGoogle,
+  signOutFirebase,
+  signUpFirebaseWithEmail,
+  updateFirebaseDisplayName,
+} from "@/lib/firebase-client";
 import { buildReminderDigest } from "@/lib/reminders";
-import { createSupabaseBrowserClient, hasSupabaseEnv } from "@/lib/supabase-browser";
 import type {
   CreateItemPayload,
   CreateListPayload,
@@ -220,7 +229,7 @@ function deriveName(email: string, fallback?: string | null) {
   return fallback?.trim() || email.split("@")[0] || "ユーザー";
 }
 
-async function syncSupabaseUserToLocal(params: {
+async function syncFirebaseUserToLocal(params: {
   id: string;
   email: string;
   name?: string | null;
@@ -229,14 +238,22 @@ async function syncSupabaseUserToLocal(params: {
 }) {
   const db = await getDb();
   const existing = await db.get("users", params.id);
-  const account: UserRecord = {
+  let account: UserRecord = {
     id: params.id,
     email: params.email.toLowerCase(),
     name: params.name?.trim() || existing?.name || deriveName(params.email, params.name),
     createdAt: existing?.createdAt ?? new Date().toISOString(),
   };
   if (params.syncRemote) {
-    await syncRemoteProfile(toProfile(account));
+    const remoteProfile = await syncRemoteProfile(toProfile(account));
+    if (remoteProfile) {
+      account = {
+        id: remoteProfile.id,
+        email: remoteProfile.email,
+        name: remoteProfile.name,
+        createdAt: remoteProfile.created_at,
+      };
+    }
   }
   const profile = await upsertLocalUser(account, params.persistSession);
   if (params.persistSession) {
@@ -262,14 +279,14 @@ function canEdit(list: ShoppingList, memberUserIds: string[], viewerId?: string 
   return viewerId === list.ownerUserId || memberUserIds.includes(viewerId);
 }
 
-type SupabaseProfileRow = {
+type ApiProfileRow = {
   id: string;
   email: string;
   name: string;
   created_at: string;
 };
 
-type SupabaseListRow = {
+type ApiListRow = {
   id: string;
   name: string;
   description: string | null;
@@ -283,7 +300,7 @@ type SupabaseListRow = {
   updated_at: string;
 };
 
-type SupabaseMemberRow = {
+type ApiMemberRow = {
   id: string;
   list_id: string;
   user_id: string;
@@ -292,7 +309,7 @@ type SupabaseMemberRow = {
   created_at: string;
 };
 
-type SupabaseItemRow = {
+type ApiItemRow = {
   id: string;
   list_id: string;
   title: string;
@@ -311,31 +328,31 @@ type SupabaseItemRow = {
   updated_at: string;
 };
 
-type SupabaseOverviewItemRow = Pick<
-  SupabaseItemRow,
+type ApiOverviewItemRow = Pick<
+  ApiItemRow,
   "id" | "list_id" | "status" | "scope" | "due_date" | "remind_on" | "reminder_enabled" | "created_by_user_id"
 >;
 
-type SupabaseOverviewRows = {
-  lists: SupabaseListRow[];
-  members: SupabaseMemberRow[];
-  items: SupabaseOverviewItemRow[];
-  profiles: SupabaseProfileRow[];
+type ApiOverviewRows = {
+  lists: ApiListRow[];
+  members: ApiMemberRow[];
+  items: ApiOverviewItemRow[];
+  profiles: ApiProfileRow[];
 };
 
-type SupabaseSnapshotResponse = {
-  list: SupabaseListRow;
-  members: SupabaseMemberRow[];
-  items: SupabaseItemRow[];
-  profiles: SupabaseProfileRow[];
-  categories?: SupabaseOverviewRows;
+type ApiSnapshotResponse = {
+  list: ApiListRow;
+  members: ApiMemberRow[];
+  items: ApiItemRow[];
+  profiles: ApiProfileRow[];
+  categories?: ApiOverviewRows;
 };
 
 const CURRENT_USER_CACHE_TTL_MS = 1000 * 60;
 let currentUserCache: { user: UserProfile | null; cachedAt: number } | null = null;
 let currentUserRequest: Promise<UserProfile | null> | null = null;
 
-function toSupabaseProfile(row: SupabaseProfileRow): UserProfile {
+function toApiProfile(row: ApiProfileRow): UserProfile {
   return {
     id: row.id,
     email: row.email,
@@ -344,7 +361,7 @@ function toSupabaseProfile(row: SupabaseProfileRow): UserProfile {
   };
 }
 
-function toSupabaseList(row: SupabaseListRow, sortOrder = 0): ShoppingList {
+function toApiList(row: ApiListRow, sortOrder = 0): ShoppingList {
   return {
     id: row.id,
     name: row.name,
@@ -361,7 +378,7 @@ function toSupabaseList(row: SupabaseListRow, sortOrder = 0): ShoppingList {
   };
 }
 
-function toSupabaseMember(row: SupabaseMemberRow): ShoppingListMember {
+function toApiMember(row: ApiMemberRow): ShoppingListMember {
   return {
     id: row.id,
     listId: row.list_id,
@@ -372,7 +389,7 @@ function toSupabaseMember(row: SupabaseMemberRow): ShoppingListMember {
   };
 }
 
-function toSupabaseItem(row: SupabaseItemRow, sortOrder = 0): ShoppingItem {
+function toApiItem(row: ApiItemRow, sortOrder = 0): ShoppingItem {
   return {
     id: row.id,
     listId: row.list_id,
@@ -408,20 +425,20 @@ function toItemView(item: ShoppingItem, userMap: Map<string, UserRecord | UserPr
   };
 }
 
-function buildSupabaseOverviews(
+function buildApiOverviews(
   viewerId: string,
-  listRows: SupabaseListRow[] = [],
-  memberRows: SupabaseMemberRow[] = [],
-  itemRows: SupabaseOverviewItemRow[] = [],
-  profileRows: SupabaseProfileRow[] = [],
+  listRows: ApiListRow[] = [],
+  memberRows: ApiMemberRow[] = [],
+  itemRows: ApiOverviewItemRow[] = [],
+  profileRows: ApiProfileRow[] = [],
 ) {
-  const members = memberRows.map(toSupabaseMember);
-  const profiles = profileRows.map(toSupabaseProfile);
+  const members = memberRows.map(toApiMember);
+  const profiles = profileRows.map(toApiProfile);
   const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
   const today = todayKey();
 
   return listRows
-    .map((row, index) => toSupabaseList(row, index))
+    .map((row, index) => toApiList(row, index))
     .filter((list) => list.ownerUserId === viewerId || members.some((member) => member.listId === list.id && member.userId === viewerId))
     .map<ShoppingListOverview>((list) => {
       const listMembers = members.filter((member) => member.listId === list.id);
@@ -452,17 +469,8 @@ function buildSupabaseOverviews(
     .sort((left, right) => left.sortOrder - right.sortOrder || right.updatedAt.localeCompare(left.updatedAt));
 }
 
-async function getSupabaseAccessToken() {
-  const supabase = createSupabaseBrowserClient();
-  if (!supabase) {
-    return null;
-  }
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
-}
-
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = await getSupabaseAccessToken();
+  const token = await getFirebaseIdToken();
   if (!token) {
     throw new Error("ログインが必要です。");
   }
@@ -486,36 +494,28 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
 }
 
 async function syncRemoteProfile(profile: UserProfile) {
-  if (!hasSupabaseEnv()) {
-    return;
+  if (!hasFirebaseEnv()) {
+    return null;
   }
-  await requestJson("/api/profiles/sync", {
+  const response = await requestJson<{ profile: ApiProfileRow }>("/api/profiles/sync", {
     method: "POST",
     body: JSON.stringify({ name: profile.name }),
   }).catch(() => null);
+  return response?.profile ?? null;
 }
 
 export async function signInWithGoogle() {
-  const supabase = createSupabaseBrowserClient();
-  if (!supabase) {
-    throw new Error("Supabase の接続設定を確認してください。");
+  const user = await signInFirebaseWithGoogle();
+  if (!user.email) {
+    throw new Error("Googleアカウントのメールアドレスを確認できませんでした。");
   }
-
-  const redirectTo = `${window.location.origin}/auth/callback`;
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo,
-      queryParams: {
-        access_type: "offline",
-        prompt: "consent",
-      },
-    },
+  await syncFirebaseUserToLocal({
+    id: user.uid,
+    email: user.email,
+    name: user.displayName,
+    persistSession: true,
+    syncRemote: true,
   });
-
-  if (error) {
-    throw new Error(error.message);
-  }
 }
 
 export async function signInWithEmail(payload: { email: string; password: string }) {
@@ -524,25 +524,12 @@ export async function signInWithEmail(payload: { email: string; password: string
     throw new Error("メールアドレスと8文字以上のパスワードを入力してください。");
   }
 
-  const supabase = createSupabaseBrowserClient();
-  if (!supabase) {
-    throw new Error("Supabase の接続設定を確認してください。");
-  }
-
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: parsed.data.email,
-    password: parsed.data.password,
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  if (data.user?.email) {
-    await syncSupabaseUserToLocal({
-      id: data.user.id,
-      email: data.user.email,
-      name: typeof data.user.user_metadata?.name === "string" ? data.user.user_metadata.name : null,
+  const user = await signInFirebaseWithEmail(parsed.data.email, parsed.data.password);
+  if (user.email) {
+    await syncFirebaseUserToLocal({
+      id: user.uid,
+      email: user.email,
+      name: user.displayName,
       persistSession: true,
       syncRemote: true,
     });
@@ -555,45 +542,25 @@ export async function signUpWithEmail(payload: { email: string; password: string
     throw new Error("メールアドレスと8文字以上のパスワードを入力してください。");
   }
 
-  const supabase = createSupabaseBrowserClient();
-  if (!supabase) {
-    throw new Error("Supabase の接続設定を確認してください。");
-  }
-
   const displayName = deriveName(parsed.data.email, parsed.data.name);
-  const { data, error } = await supabase.auth.signUp({
-    email: parsed.data.email,
-    password: parsed.data.password,
-    options: {
-      data: { name: displayName },
-      emailRedirectTo: `${window.location.origin}/auth/callback`,
-    },
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  if (data.user?.email && data.session) {
-    await syncSupabaseUserToLocal({
-      id: data.user.id,
-      email: data.user.email,
+  const user = await signUpFirebaseWithEmail(parsed.data.email, parsed.data.password, displayName);
+  if (user.email) {
+    await syncFirebaseUserToLocal({
+      id: user.uid,
+      email: user.email,
       name: displayName,
       persistSession: true,
       syncRemote: true,
     });
-    return { needsConfirmation: false };
   }
-
-  return { needsConfirmation: true };
+  return { needsConfirmation: false };
 }
 
 export async function signOutLocal() {
   currentUserCache = null;
   currentUserRequest = null;
-  if (hasSupabaseEnv()) {
-    const supabase = createSupabaseBrowserClient();
-    await supabase?.auth.signOut();
+  if (hasFirebaseEnv()) {
+    await signOutFirebase();
   }
   const db = await getDb();
   await db.delete("session", "current");
@@ -614,31 +581,15 @@ export async function getCurrentUser() {
 }
 
 async function resolveCurrentUser() {
-  if (hasSupabaseEnv()) {
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      return null;
-    }
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const user = session?.user;
-
+  if (hasFirebaseEnv()) {
+    const user = await getFirebaseUser();
     if (user?.email) {
-      const nameFromMeta =
-        typeof user.user_metadata?.name === "string"
-          ? user.user_metadata.name
-          : typeof user.user_metadata?.full_name === "string"
-            ? user.user_metadata.full_name
-            : null;
-
-      const profile = await syncSupabaseUserToLocal({
-        id: user.id,
+      const profile = await syncFirebaseUserToLocal({
+        id: user.uid,
         email: user.email,
-        name: nameFromMeta,
+        name: user.displayName,
         persistSession: true,
-        syncRemote: false,
+        syncRemote: true,
       });
       currentUserCache = { user: profile, cachedAt: Date.now() };
       return profile;
@@ -686,7 +637,11 @@ export async function updateUserProfile(viewer: UserProfile, payload: { name: st
     throw new Error("表示名は1〜40文字で入力してください。");
   }
 
-  if (hasSupabaseEnv()) {
+  if (hasFirebaseEnv()) {
+    const firebaseUser = await getFirebaseUser();
+    if (firebaseUser) {
+      await updateFirebaseDisplayName(firebaseUser, name);
+    }
     await requestJson("/api/profiles/sync", {
       method: "POST",
       body: JSON.stringify({ name }),
@@ -705,20 +660,20 @@ export async function updateUserProfile(viewer: UserProfile, payload: { name: st
   return profile;
 }
 
-async function listAccessibleListsFromSupabase(viewerId: string) {
+async function listAccessibleListsFromApi(viewerId: string) {
   const {
     lists: listRows,
     members: memberRows,
     items: itemRows,
     profiles: profileRows,
   } = await requestJson<{
-    lists: SupabaseListRow[];
-    members: SupabaseMemberRow[];
-    items: SupabaseOverviewItemRow[];
-    profiles: SupabaseProfileRow[];
+    lists: ApiListRow[];
+    members: ApiMemberRow[];
+    items: ApiOverviewItemRow[];
+    profiles: ApiProfileRow[];
   }>("/api/lists");
 
-  return buildSupabaseOverviews(viewerId, listRows ?? [], memberRows ?? [], itemRows ?? [], profileRows ?? []);
+  return buildApiOverviews(viewerId, listRows ?? [], memberRows ?? [], itemRows ?? [], profileRows ?? []);
 }
 
 function buildLocalOverviews(
@@ -823,8 +778,8 @@ function buildLocalSnapshotFromData(
 }
 
 export async function listAccessibleLists(viewerId: string) {
-  if (hasSupabaseEnv() && viewerId !== GUEST_USER_ID) {
-    return listAccessibleListsFromSupabase(viewerId);
+  if (hasFirebaseEnv() && viewerId !== GUEST_USER_ID) {
+    return listAccessibleListsFromApi(viewerId);
   }
 
   const db = await getDb();
@@ -844,13 +799,13 @@ export async function createList(viewer: UserProfile, payload: CreateListPayload
     throw new Error("リスト名と通知設定を確認してください。");
   }
 
-  if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
-    const { list } = await requestJson<{ list: SupabaseListRow }>("/api/lists", {
+  if (hasFirebaseEnv() && viewer.id !== GUEST_USER_ID) {
+    const { list } = await requestJson<{ list: ApiListRow }>("/api/lists", {
       method: "POST",
       body: JSON.stringify(result.data),
     });
 
-    return toSupabaseList(list);
+    return toApiList(list);
   }
 
   const db = await getDb();
@@ -887,7 +842,7 @@ export async function createList(viewer: UserProfile, payload: CreateListPayload
 }
 
 export async function createDefaultLists(viewer: UserProfile) {
-  if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
+  if (hasFirebaseEnv() && viewer.id !== GUEST_USER_ID) {
     const personal = await createList(viewer, DEFAULT_STARTER_LISTS[0]);
     const shared = await createList(viewer, DEFAULT_STARTER_LISTS[1]);
     return [personal, shared];
@@ -923,8 +878,8 @@ export async function ensureDefaultLists(viewer: UserProfile) {
 }
 
 export async function reorderLists(viewer: UserProfile, orderedListIds: string[]) {
-  if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
-    // Supabase schema v1 does not require persisted category ordering yet.
+  if (hasFirebaseEnv() && viewer.id !== GUEST_USER_ID) {
+    // D1 schema v1 does not require persisted category ordering yet.
     // Keep the optimistic UI responsive and avoid failing shared-list saves.
     return;
   }
@@ -959,13 +914,13 @@ export async function reorderLists(viewer: UserProfile, orderedListIds: string[]
 }
 
 export async function getListSnapshot(listId: string, viewerId?: string | null): Promise<ShoppingListSnapshot | null> {
-  if (hasSupabaseEnv() && viewerId !== GUEST_USER_ID) {
-    const response = await requestJson<SupabaseSnapshotResponse>(`/api/lists/${listId}`).catch(() => null);
+  if (hasFirebaseEnv() && viewerId !== GUEST_USER_ID) {
+    const response = await requestJson<ApiSnapshotResponse>(`/api/lists/${listId}`).catch(() => null);
     if (!response?.list) {
       return null;
     }
 
-    return buildSupabaseSnapshot(response, viewerId);
+    return buildApiSnapshot(response, viewerId);
   }
 
   const db = await getDb();
@@ -979,15 +934,15 @@ export async function getListSnapshot(listId: string, viewerId?: string | null):
   return buildLocalSnapshotFromData(listId, viewerId, lists, members, users, items);
 }
 
-function buildSupabaseSnapshot(response: SupabaseSnapshotResponse, viewerId?: string | null): ShoppingListSnapshot | null {
-  const list = toSupabaseList(response.list);
-  const members = ((response.members ?? []) as SupabaseMemberRow[]).map(toSupabaseMember);
+function buildApiSnapshot(response: ApiSnapshotResponse, viewerId?: string | null): ShoppingListSnapshot | null {
+  const list = toApiList(response.list);
+  const members = ((response.members ?? []) as ApiMemberRow[]).map(toApiMember);
   const memberIds = members.map((member) => member.userId);
   if (!canView(list, memberIds, viewerId)) {
     return null;
   }
 
-  const profiles = ((response.profiles ?? []) as SupabaseProfileRow[]).map(toSupabaseProfile);
+  const profiles = ((response.profiles ?? []) as ApiProfileRow[]).map(toApiProfile);
   const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
   const owner = profileMap.get(list.ownerUserId) ?? {
     id: list.ownerUserId,
@@ -996,8 +951,8 @@ function buildSupabaseSnapshot(response: SupabaseSnapshotResponse, viewerId?: st
     createdAt: list.createdAt,
   };
 
-  const items = ((response.items ?? []) as SupabaseItemRow[])
-    .map((row, index) => toSupabaseItem(row, index))
+  const items = ((response.items ?? []) as ApiItemRow[])
+    .map((row, index) => toApiItem(row, index))
     .filter((item) => {
       if (item.scope === "shared") {
         return true;
@@ -1028,15 +983,15 @@ export async function getListSnapshotBundle(
   listId: string,
   viewerId?: string | null,
 ): Promise<{ snapshot: ShoppingListSnapshot | null; categories: ShoppingListOverview[] | null }> {
-  if (hasSupabaseEnv() && viewerId !== GUEST_USER_ID) {
-    const response = await requestJson<SupabaseSnapshotResponse>(`/api/lists/${listId}`).catch(() => null);
+  if (hasFirebaseEnv() && viewerId !== GUEST_USER_ID) {
+    const response = await requestJson<ApiSnapshotResponse>(`/api/lists/${listId}`).catch(() => null);
     if (!response?.list) {
       return { snapshot: null, categories: null };
     }
     return {
-      snapshot: buildSupabaseSnapshot(response, viewerId),
+      snapshot: buildApiSnapshot(response, viewerId),
       categories: response.categories
-        ? buildSupabaseOverviews(viewerId ?? "", response.categories.lists, response.categories.members, response.categories.items, response.categories.profiles)
+        ? buildApiOverviews(viewerId ?? "", response.categories.lists, response.categories.members, response.categories.items, response.categories.profiles)
         : null,
     };
   }
@@ -1054,9 +1009,9 @@ export async function getListSnapshotBundle(
 }
 
 export async function getListSettingsSnapshot(listId: string, viewerId?: string | null): Promise<ShoppingListSnapshot | null> {
-  if (hasSupabaseEnv() && viewerId !== GUEST_USER_ID) {
-    const response = await requestJson<SupabaseSnapshotResponse>(`/api/lists/${listId}?view=settings`).catch(() => null);
-    return response?.list ? buildSupabaseSnapshot(response, viewerId) : null;
+  if (hasFirebaseEnv() && viewerId !== GUEST_USER_ID) {
+    const response = await requestJson<ApiSnapshotResponse>(`/api/lists/${listId}?view=settings`).catch(() => null);
+    return response?.list ? buildApiSnapshot(response, viewerId) : null;
   }
 
   const db = await getDb();
@@ -1072,21 +1027,21 @@ export async function getListSettingsSnapshot(listId: string, viewerId?: string 
 export async function getInitialListSnapshotBundle(
   viewerId: string,
 ): Promise<{ snapshot: ShoppingListSnapshot | null; categories: ShoppingListOverview[] }> {
-  if (hasSupabaseEnv() && viewerId !== GUEST_USER_ID) {
-    const response = await requestJson<SupabaseSnapshotResponse>(`/api/lists/initial`).catch(() => null);
+  if (hasFirebaseEnv() && viewerId !== GUEST_USER_ID) {
+    const response = await requestJson<ApiSnapshotResponse>(`/api/lists/initial`).catch(() => null);
     if (!response?.list) {
       return {
         snapshot: null,
         categories: response?.categories
-          ? buildSupabaseOverviews(viewerId, response.categories.lists, response.categories.members, response.categories.items, response.categories.profiles)
+          ? buildApiOverviews(viewerId, response.categories.lists, response.categories.members, response.categories.items, response.categories.profiles)
           : [],
       };
     }
 
     return {
-      snapshot: buildSupabaseSnapshot(response, viewerId),
+      snapshot: buildApiSnapshot(response, viewerId),
       categories: response.categories
-        ? buildSupabaseOverviews(viewerId, response.categories.lists, response.categories.members, response.categories.items, response.categories.profiles)
+        ? buildApiOverviews(viewerId, response.categories.lists, response.categories.members, response.categories.items, response.categories.profiles)
         : [],
     };
   }
@@ -1102,48 +1057,13 @@ export async function getInitialListSnapshotBundle(
 }
 
 export async function getPublicSnapshot(token: string) {
-  if (hasSupabaseEnv()) {
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
+  if (hasFirebaseEnv()) {
+    const response = await fetch(`/api/public/${token}`);
+    if (!response.ok) {
       return null;
     }
-    const { data: listRow } = await supabase
-      .from("shopping_lists")
-      .select("*")
-      .eq("public_token", token)
-      .eq("visibility", "public_link")
-      .single();
-    if (!listRow?.id) {
-      return null;
-    }
-
-    const [{ data: memberRows }, { data: itemRows }] = await Promise.all([
-      supabase.from("shopping_list_members").select("*").eq("list_id", listRow.id),
-      supabase.from("shopping_items").select("*").eq("list_id", listRow.id).eq("scope", "shared"),
-    ]);
-
-    const profileIds = [
-      ...new Set([
-        listRow.owner_user_id,
-        ...((memberRows ?? []) as SupabaseMemberRow[]).map((member) => member.user_id),
-        ...((itemRows ?? []) as SupabaseItemRow[])
-          .flatMap((item) => [item.created_by_user_id, item.updated_by_user_id, item.purchased_by_user_id])
-          .filter((value): value is string => Boolean(value)),
-      ]),
-    ];
-    const { data: profileRows } = profileIds.length
-      ? await supabase.from("profiles").select("*").in("id", profileIds)
-      : { data: [] };
-
-    return buildSupabaseSnapshot(
-      {
-        list: listRow as SupabaseListRow,
-        members: (memberRows ?? []) as SupabaseMemberRow[],
-        items: (itemRows ?? []) as SupabaseItemRow[],
-        profiles: (profileRows ?? []) as SupabaseProfileRow[],
-      },
-      null,
-    );
+    const data = (await response.json()) as ApiSnapshotResponse;
+    return data?.list ? buildApiSnapshot(data, null) : null;
   }
 
   const db = await getDb();
@@ -1161,12 +1081,12 @@ export async function createItem(listId: string, viewer: UserProfile, payload: C
     throw new Error("商品名や期限の入力を確認してください。");
   }
 
-  if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
-    const { item } = await requestJson<{ item: SupabaseItemRow }>(`/api/lists/${listId}/items`, {
+  if (hasFirebaseEnv() && viewer.id !== GUEST_USER_ID) {
+    const { item } = await requestJson<{ item: ApiItemRow }>(`/api/lists/${listId}/items`, {
       method: "POST",
       body: JSON.stringify(result.data),
     });
-    return toSupabaseItem(item);
+    return toApiItem(item);
   }
 
   const snapshot = await getListSnapshot(listId, viewer.id);
@@ -1210,7 +1130,7 @@ export async function reorderItems(listId: string, viewer: UserProfile, orderedI
     throw new Error("このリストを編集する権限がありません。");
   }
 
-  if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
+  if (hasFirebaseEnv() && viewer.id !== GUEST_USER_ID) {
     return;
   }
 
@@ -1273,7 +1193,7 @@ export async function updateItem(
     }
   }
 
-  if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
+  if (hasFirebaseEnv() && viewer.id !== GUEST_USER_ID) {
     await requestJson(`/api/lists/${listId}/items/${itemId}`, {
       method: "PATCH",
       body: JSON.stringify({ payload: result.data, nextListId: destinationListId }),
@@ -1321,7 +1241,7 @@ export async function toggleItemStatus(listId: string, itemId: string, viewer: U
   if (!snapshot || snapshot.permission !== "edit") {
     throw new Error("このリストを編集する権限がありません。");
   }
-  if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
+  if (hasFirebaseEnv() && viewer.id !== GUEST_USER_ID) {
     await requestJson(`/api/lists/${listId}/items/${itemId}`, {
       method: "PATCH",
       body: JSON.stringify({ toggleStatus: true }),
@@ -1348,7 +1268,7 @@ export async function removeItem(listId: string, itemId: string, viewer: UserPro
   if (!snapshot || snapshot.permission !== "edit") {
     throw new Error("このリストを編集する権限がありません。");
   }
-  if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
+  if (hasFirebaseEnv() && viewer.id !== GUEST_USER_ID) {
     await requestJson(`/api/lists/${listId}/items/${itemId}`, {
       method: "DELETE",
     });
@@ -1359,7 +1279,7 @@ export async function removeItem(listId: string, itemId: string, viewer: UserPro
 }
 
 export async function removeList(listId: string, viewer: UserProfile) {
-  if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
+  if (hasFirebaseEnv() && viewer.id !== GUEST_USER_ID) {
     await requestJson(`/api/lists/${listId}`, {
       method: "DELETE",
     });
@@ -1403,7 +1323,7 @@ export async function addListMember(listId: string, email: string, viewer: UserP
     throw new Error("共有先のメールアドレスを確認してください。");
   }
 
-  if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
+  if (hasFirebaseEnv() && viewer.id !== GUEST_USER_ID) {
     await requestJson(`/api/lists/${listId}/members`, {
       method: "POST",
       body: JSON.stringify({ email: result.data.email }),
@@ -1440,7 +1360,7 @@ export async function addListMember(listId: string, email: string, viewer: UserP
 }
 
 export async function createListInvite(listId: string, viewer: UserProfile): Promise<ListInvite> {
-  if (!hasSupabaseEnv() || viewer.id === GUEST_USER_ID) {
+  if (!hasFirebaseEnv() || viewer.id === GUEST_USER_ID) {
     throw new Error("招待リンクを作るにはGoogleログインが必要です。");
   }
 
@@ -1451,7 +1371,7 @@ export async function createListInvite(listId: string, viewer: UserProfile): Pro
 }
 
 export async function acceptListInvite(token: string, viewer: UserProfile) {
-  if (!hasSupabaseEnv() || viewer.id === GUEST_USER_ID) {
+  if (!hasFirebaseEnv() || viewer.id === GUEST_USER_ID) {
     throw new Error("共有リストに参加するにはGoogleログインが必要です。");
   }
 
@@ -1466,7 +1386,7 @@ export async function updateListSettings(listId: string, viewer: UserProfile, pa
     throw new Error("通知設定を確認してください。");
   }
 
-  if (hasSupabaseEnv() && viewer.id !== GUEST_USER_ID) {
+  if (hasFirebaseEnv() && viewer.id !== GUEST_USER_ID) {
     await requestJson(`/api/lists/${listId}`, {
       method: "PATCH",
       body: JSON.stringify(result.data),

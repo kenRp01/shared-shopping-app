@@ -16,16 +16,13 @@
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
-    "cf:heartbeat:dev": "wrangler dev --config wrangler.heartbeat.jsonc",
-    "cf:heartbeat:deploy": "wrangler deploy --config wrangler.heartbeat.jsonc",
-    "cf:heartbeat:secret": "wrangler secret put CRON_SECRET --config wrangler.heartbeat.jsonc"
+    "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.5.2",
-    "@supabase/supabase-js": "^2.49.8",
     "@types/qrcode": "^1.5.6",
+    "firebase": "^12.15.0",
     "idb": "^8.0.2",
+    "jose": "^6.2.3",
     "lucide-react": "^0.511.0",
     "next": "^15.3.1",
     "qrcode": "^1.5.4",

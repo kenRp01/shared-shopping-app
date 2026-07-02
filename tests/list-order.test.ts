@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { sortSupabaseListsByCreatedAt } from "@/lib/list-order";
+import { sortListsByCreatedAt } from "@/lib/list-order";
 
-describe("sortSupabaseListsByCreatedAt", () => {
+describe("sortListsByCreatedAt", () => {
   it("keeps newer lists on the right by sorting oldest first", () => {
     const lists = [
       { id: "list_new", created_at: "2026-05-17T10:02:00.000Z", updated_at: "2026-05-17T10:02:00.000Z" },
@@ -9,7 +9,7 @@ describe("sortSupabaseListsByCreatedAt", () => {
       { id: "list_middle", created_at: "2026-05-17T10:01:00.000Z", updated_at: "2026-05-17T10:01:00.000Z" },
     ];
 
-    expect(sortSupabaseListsByCreatedAt(lists).map((list) => list.id)).toEqual([
+    expect(sortListsByCreatedAt(lists).map((list) => list.id)).toEqual([
       "list_old",
       "list_middle",
       "list_new",

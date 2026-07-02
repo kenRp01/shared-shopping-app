@@ -33,6 +33,7 @@ export function AuthForm() {
               try {
                 setMessage(null);
                 await signInWithGoogle();
+                router.push("/");
               } catch (error) {
                 setMessage(error instanceof Error ? error.message : "Googleログインを開始できませんでした。");
               }
