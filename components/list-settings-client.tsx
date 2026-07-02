@@ -51,7 +51,7 @@ function normalizeDisplayName(name: string) {
 function friendlyInviteError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
   if (message.includes("shopping_list_invites") || message.includes("schema cache")) {
-    return "招待リンク用のDB設定が未反映です。公開リンクのQR共有を使うか、Supabaseでschema.sqlを適用してください。";
+    return "招待リンク用のD1設定が未反映です。Cloudflare D1のmigrationを確認してください。";
   }
   return message || "招待リンクを作成できませんでした。";
 }

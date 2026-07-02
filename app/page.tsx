@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { FullScreenAppLoader } from "@/components/app-loader";
 import { DEFAULT_STARTER_LISTS } from "@/lib/constants";
 import { continueAsGuest, createDefaultLists, ensureDefaultLists, getCurrentUser, getInitialListSnapshotBundle } from "@/lib/local-store";
 
@@ -78,15 +79,11 @@ export default function HomePage() {
   }, [router]);
 
   if (!error) {
-    return (
-      <div className="page-grid redirect-shell" aria-busy="true" aria-live="polite">
-        <div className="redirect-loader" aria-label="リストを開いています" role="status" />
-      </div>
-    );
+    return <FullScreenAppLoader label="リストを開いています" />;
   }
 
   return (
-    <div className="page-grid redirect-shell">
+    <div className="app-loading-screen app-loading-screen-error">
       <p className="notice-inline">{error}</p>
     </div>
   );

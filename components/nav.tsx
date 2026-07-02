@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { FullScreenAppLoader } from "@/components/app-loader";
 import { Logo } from "@/components/logo";
 import { getCurrentUser, signOutLocal } from "@/lib/local-store";
 import type { UserProfile } from "@/lib/types";
@@ -95,11 +96,7 @@ export function Nav() {
           </>
         )}
       </nav>
-      {isSigningOut ? (
-        <div className="app-transition-screen" aria-busy="true" aria-live="polite">
-          <div className="redirect-loader" aria-label="ログアウトしています" role="status" />
-        </div>
-      ) : null}
+      {isSigningOut ? <FullScreenAppLoader label="ログアウトしています" /> : null}
     </header>
   );
 }

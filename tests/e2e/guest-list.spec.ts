@@ -14,7 +14,7 @@ async function openGuestList(page: Page) {
 }
 
 test.describe("Guest shopping list", () => {
-  test("uses the neutral redirect loader before opening the first list", async ({ page }) => {
+  test("uses the app loader before opening the first list", async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem("shareshopi:theme", "dark");
       document.documentElement.dataset.theme = "dark";
@@ -23,8 +23,10 @@ test.describe("Guest shopping list", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
     await expect(page.locator(".landing-hero")).toHaveCount(0);
-    await expect(page.locator(".redirect-loader")).toBeVisible();
-    const loaderShell = await page.locator(".redirect-shell").evaluate((node) => {
+    await expect(page.locator(".redirect-loader")).toHaveCount(0);
+    await expect(page.locator(".app-loader")).toBeVisible();
+    await expect(page.locator(".app-loader-bag")).toBeVisible();
+    const loaderShell = await page.locator(".app-loading-screen").evaluate((node) => {
       const style = getComputedStyle(node);
       const rect = node.getBoundingClientRect();
       return {
@@ -45,7 +47,7 @@ test.describe("Guest shopping list", () => {
     await expect(page).toHaveURL(/\/lists\/list_/, { timeout: 20_000 });
   });
 
-  test("keeps the carousel layout during the first resolving paint", async ({ page }) => {
+  test("does not show the old carousel skeleton during the first resolving paint", async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem("shareshopi:theme", "dark");
       document.documentElement.dataset.theme = "dark";
@@ -53,8 +55,9 @@ test.describe("Guest shopping list", () => {
 
     await page.goto("/lists/list_first_paint_check", { waitUntil: "domcontentloaded" });
 
-    await expect(page.locator(".list-carousel-stage")).toBeVisible();
-    await expect(page.locator(".page-grid.detail-shell > .panel.list-section-panel:not(.list-carousel-stage)")).toHaveCount(0);
+    await expect(page.locator(".app-loader")).toBeVisible();
+    await expect(page.locator(".category-card-skeleton")).toHaveCount(0);
+    await expect(page.locator(".page-grid.detail-shell > .panel.list-section-panel")).toHaveCount(0);
   });
 
   test("opens a guest list, adds an item, and removes it by checkbox", async ({ page }) => {
