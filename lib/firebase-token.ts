@@ -5,6 +5,13 @@ const FIREBASE_JWKS_URL = new URL(
 );
 const firebaseJwks = createRemoteJWKSet(FIREBASE_JWKS_URL);
 
+export class UnverifiedFirebaseEmailError extends Error {
+  constructor() {
+    super("メール認証が完了していません。");
+    this.name = "UnverifiedFirebaseEmailError";
+  }
+}
+
 export type FirebaseTokenViewer = {
   uid: string;
   email: string | null;
@@ -61,6 +68,10 @@ export async function verifyFirebaseIdToken(token: string, options: VerifyFireba
 
   if (typeof payload.sub !== "string" || payload.sub.length === 0 || payload.sub.length > 128) {
     throw new Error("Firebase ID Token の sub が不正です。");
+  }
+
+  if (typeof payload.email === "string" && payload.email_verified !== true) {
+    throw new UnverifiedFirebaseEmailError();
   }
 
   return {

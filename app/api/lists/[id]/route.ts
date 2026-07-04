@@ -43,7 +43,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (updated.status !== 200) {
     return NextResponse.json({ error: updated.error }, { status: updated.status });
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, publicToken: updated.publicToken });
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {

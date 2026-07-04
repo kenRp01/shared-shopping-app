@@ -2,6 +2,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { sortListsByCreatedAt } from "@/lib/list-order";
 import type { CreateItemPayload, CreateListPayload, ListVisibility, Role, UpdateReminderSettingsPayload } from "@/lib/types";
 import { makeId } from "@/lib/utils";
+import { createShareToken, hashShareToken, inviteExpiry, isShareTokenExpired } from "@/lib/share-token";
 
 export type D1ProfileRow = {
   id: string;
@@ -57,6 +58,7 @@ export type D1ItemRow = {
 
 type D1RawListRow = Omit<D1ListRow, "daily_reminder_enabled"> & {
   daily_reminder_enabled: number | boolean;
+  public_token_hash?: string | null;
 };
 
 type D1RawItemRow = Omit<D1ItemRow, "reminder_enabled"> & {
@@ -65,7 +67,8 @@ type D1RawItemRow = Omit<D1ItemRow, "reminder_enabled"> & {
 
 type D1RawInviteRow = {
   list_id: string;
-  token: string;
+  token_hash: string;
+  expires_at: string;
   enabled: number | boolean;
 };
 
@@ -98,8 +101,9 @@ function nowIso() {
 }
 
 function normalizeList(row: D1RawListRow): D1ListRow {
+  const { public_token_hash: _publicTokenHash, ...publicRow } = row;
   return {
-    ...row,
+    ...publicRow,
     daily_reminder_enabled: Boolean(row.daily_reminder_enabled),
   };
 }
@@ -255,10 +259,11 @@ export async function getD1ListSnapshot(
 }
 
 export async function getD1PublicSnapshot(db: D1Database, token: string): Promise<D1SnapshotResponse | null> {
+  const tokenHash = await hashShareToken(token);
   const rawList = await first<D1RawListRow>(
     db,
-    "SELECT * FROM shopping_lists WHERE public_token = ? AND visibility = 'public_link'",
-    token,
+    "SELECT * FROM shopping_lists WHERE public_token_hash = ? AND visibility = 'public_link'",
+    tokenHash,
   );
   if (!rawList) {
     return null;
@@ -292,16 +297,17 @@ export async function createD1List(db: D1Database, viewer: { id: string; email?:
   });
 
   const listId = makeId("list");
-  const publicToken = payload.visibility === "public_link" ? makeId("public") : null;
+  const publicToken = payload.visibility === "public_link" ? createShareToken("public") : null;
+  const publicTokenHash = publicToken ? await hashShareToken(publicToken) : null;
   const timestamp = nowIso();
   await db
     .prepare(
       `
         INSERT INTO shopping_lists (
-          id, name, description, planned_date, visibility, owner_user_id, public_token,
+          id, name, description, planned_date, visibility, owner_user_id, public_token, public_token_hash,
           daily_reminder_enabled, daily_reminder_hour, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
       `,
     )
     .bind(
@@ -311,7 +317,7 @@ export async function createD1List(db: D1Database, viewer: { id: string; email?:
       payload.plannedDate,
       payload.visibility,
       viewer.id,
-      publicToken,
+      publicTokenHash,
       payload.dailyReminderEnabled ? 1 : 0,
       payload.dailyReminderHour,
       timestamp,
@@ -331,11 +337,11 @@ export async function createD1List(db: D1Database, viewer: { id: string; email?:
     .run();
 
   const list = await first<D1RawListRow>(db, "SELECT * FROM shopping_lists WHERE id = ?", listId);
-  return list ? normalizeList(list) : null;
+  return list ? { ...normalizeList(list), public_token: publicToken } : null;
 }
 
 export async function updateD1ListSettings(db: D1Database, viewerId: string, listId: string, payload: UpdateReminderSettingsPayload) {
-  const list = await first<D1RawListRow>(db, "SELECT id, owner_user_id, public_token FROM shopping_lists WHERE id = ?", listId);
+  const list = await first<D1RawListRow>(db, "SELECT id, owner_user_id, public_token, public_token_hash FROM shopping_lists WHERE id = ?", listId);
   if (!list) {
     return { status: 404 as const, error: "リストが見つかりません。" };
   }
@@ -343,24 +349,55 @@ export async function updateD1ListSettings(db: D1Database, viewerId: string, lis
     return { status: 403 as const, error: "共有設定を変更できるのは所有者だけです。" };
   }
 
+  let issuedPublicToken: string | null = null;
+  let publicTokenHash: string | null = null;
+  if (payload.publicEnabled) {
+    publicTokenHash = list.public_token_hash ?? null;
+    if (!publicTokenHash && list.public_token) {
+      publicTokenHash = await hashShareToken(list.public_token);
+    }
+    if (!publicTokenHash) {
+      issuedPublicToken = createShareToken("public");
+      publicTokenHash = await hashShareToken(issuedPublicToken);
+    }
+  }
+
   await db
     .prepare(
       `
         UPDATE shopping_lists
-        SET visibility = ?, public_token = ?, daily_reminder_enabled = ?, daily_reminder_hour = ?, updated_at = ?
+        SET visibility = ?, public_token = NULL, public_token_hash = ?, daily_reminder_enabled = ?, daily_reminder_hour = ?, updated_at = ?
         WHERE id = ?
       `,
     )
     .bind(
       payload.publicEnabled ? "public_link" : payload.visibility,
-      payload.publicEnabled ? list.public_token ?? makeId("public") : null,
+      publicTokenHash,
       payload.dailyReminderEnabled ? 1 : 0,
       payload.dailyReminderHour,
       nowIso(),
       listId,
     )
     .run();
-  return { status: 200 as const };
+  return { status: 200 as const, publicToken: issuedPublicToken };
+}
+
+export async function rotateD1PublicToken(db: D1Database, viewerId: string, listId: string) {
+  const list = await first<Pick<D1ListRow, "id" | "owner_user_id">>(db, "SELECT id, owner_user_id FROM shopping_lists WHERE id = ?", listId);
+  if (!list) {
+    return { status: 404 as const, error: "リストが見つかりません。" };
+  }
+  if (list.owner_user_id !== viewerId) {
+    return { status: 403 as const, error: "公開リンクを発行できるのは所有者だけです。" };
+  }
+
+  const token = createShareToken("public");
+  const tokenHash = await hashShareToken(token);
+  await db
+    .prepare("UPDATE shopping_lists SET visibility = 'public_link', public_token = NULL, public_token_hash = ?, updated_at = ? WHERE id = ?")
+    .bind(tokenHash, nowIso(), listId)
+    .run();
+  return { status: 200 as const, token };
 }
 
 export async function deleteD1List(db: D1Database, viewerId: string, listId: string) {
@@ -545,25 +582,22 @@ export async function createD1Invite(db: D1Database, viewerId: string, origin: s
   if (list.owner_user_id !== viewerId) {
     return { status: 403 as const, error: "招待リンクを作成できるのは所有者だけです。" };
   }
-  const existing = await first<Pick<D1RawInviteRow, "token">>(
-    db,
-    "SELECT token FROM shopping_list_invites WHERE list_id = ? AND enabled = 1 ORDER BY created_at DESC LIMIT 1",
-    listId,
-  );
-  const token = existing?.token ?? makeId("invite");
-  if (!existing?.token) {
-    await db
-      .prepare("INSERT INTO shopping_list_invites (id, list_id, token, enabled, created_by_user_id) VALUES (?, ?, ?, 1, ?)")
-      .bind(makeId("invite_row"), listId, token, viewerId)
-      .run();
-  }
+  const token = createShareToken("invite");
+  const tokenHash = await hashShareToken(token);
+  const expiresAt = inviteExpiry();
+  await db.prepare("UPDATE shopping_list_invites SET enabled = 0 WHERE list_id = ? AND enabled = 1").bind(listId).run();
+  await db
+    .prepare("INSERT INTO shopping_list_invites (id, list_id, token_hash, enabled, expires_at, created_by_user_id) VALUES (?, ?, ?, 1, ?, ?)")
+    .bind(makeId("invite_row"), listId, tokenHash, expiresAt, viewerId)
+    .run();
   await db.prepare("UPDATE shopping_lists SET visibility = 'shared', updated_at = ? WHERE id = ?").bind(nowIso(), listId).run();
-  return { status: 200 as const, invite: { token, url: `${origin}/invite/${token}` } };
+  return { status: 200 as const, invite: { token, url: `${origin}/invite/${token}`, expiresAt } };
 }
 
 export async function acceptD1Invite(db: D1Database, viewerId: string, token: string) {
-  const invite = await first<D1RawInviteRow>(db, "SELECT list_id, token, enabled FROM shopping_list_invites WHERE token = ? AND enabled = 1", token);
-  if (!invite?.enabled) {
+  const tokenHash = await hashShareToken(token);
+  const invite = await first<D1RawInviteRow>(db, "SELECT list_id, token_hash, expires_at, enabled FROM shopping_list_invites WHERE token_hash = ? AND enabled = 1", tokenHash);
+  if (!invite?.enabled || isShareTokenExpired(invite.expires_at)) {
     return { status: 404 as const, error: "招待リンクが見つかりません。" };
   }
   const list = await first<Pick<D1ListRow, "id" | "owner_user_id">>(db, "SELECT id, owner_user_id FROM shopping_lists WHERE id = ?", invite.list_id);

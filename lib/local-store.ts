@@ -32,6 +32,7 @@ import type {
   UserProfile,
 } from "@/lib/types";
 import { formatRelativeDue, makeId, todayKey } from "@/lib/utils";
+import { createShareToken } from "@/lib/share-token";
 import {
   createItemSchema,
   createListSchema,
@@ -509,6 +510,10 @@ export async function signInWithGoogle() {
   if (!user.email) {
     throw new Error("Googleアカウントのメールアドレスを確認できませんでした。");
   }
+  if (!user.emailVerified) {
+    await signOutFirebase();
+    throw new Error("Googleアカウントのメール認証を確認できませんでした。");
+  }
   await syncFirebaseUserToLocal({
     id: user.uid,
     email: user.email,
@@ -525,6 +530,14 @@ export async function signInWithEmail(payload: { email: string; password: string
   }
 
   const user = await signInFirebaseWithEmail(parsed.data.email, parsed.data.password);
+  if (!user.emailVerified) {
+    await signOutFirebase();
+    currentUserCache = null;
+    currentUserRequest = null;
+    const db = await getDb();
+    await db.delete("session", "current");
+    throw new Error("確認メール内のリンクからメール認証を完了してください。");
+  }
   if (user.email) {
     await syncFirebaseUserToLocal({
       id: user.uid,
@@ -543,17 +556,13 @@ export async function signUpWithEmail(payload: { email: string; password: string
   }
 
   const displayName = deriveName(parsed.data.email, parsed.data.name);
-  const user = await signUpFirebaseWithEmail(parsed.data.email, parsed.data.password, displayName);
-  if (user.email) {
-    await syncFirebaseUserToLocal({
-      id: user.uid,
-      email: user.email,
-      name: displayName,
-      persistSession: true,
-      syncRemote: true,
-    });
-  }
-  return { needsConfirmation: false };
+  await signUpFirebaseWithEmail(parsed.data.email, parsed.data.password, displayName);
+  await signOutFirebase();
+  currentUserCache = null;
+  currentUserRequest = null;
+  const db = await getDb();
+  await db.delete("session", "current");
+  return { needsConfirmation: true };
 }
 
 export async function signOutLocal() {
@@ -583,6 +592,13 @@ export async function getCurrentUser() {
 async function resolveCurrentUser() {
   if (hasFirebaseEnv()) {
     const user = await getFirebaseUser();
+    if (user && !user.emailVerified) {
+      await signOutFirebase();
+      const db = await getDb();
+      await db.delete("session", "current");
+      currentUserCache = { user: null, cachedAt: Date.now() };
+      return null;
+    }
     if (user?.email) {
       const profile = await syncFirebaseUserToLocal({
         id: user.uid,
@@ -819,7 +835,7 @@ export async function createList(viewer: UserProfile, payload: CreateListPayload
     plannedDate: result.data.plannedDate,
     visibility: result.data.visibility,
     ownerUserId: viewer.id,
-    publicToken: result.data.visibility === "public_link" ? makeId("public") : null,
+    publicToken: result.data.visibility === "public_link" ? createShareToken("public") : null,
     dailyReminderEnabled: result.data.dailyReminderEnabled,
     dailyReminderHour: result.data.dailyReminderHour,
     createdAt: now,
@@ -1387,11 +1403,10 @@ export async function updateListSettings(listId: string, viewer: UserProfile, pa
   }
 
   if (hasFirebaseEnv() && viewer.id !== GUEST_USER_ID) {
-    await requestJson(`/api/lists/${listId}`, {
+    return requestJson<{ ok: boolean; publicToken: string | null }>(`/api/lists/${listId}`, {
       method: "PATCH",
       body: JSON.stringify(result.data),
     });
-    return;
   }
 
   const snapshot = await getListSnapshot(listId, viewer.id);
@@ -1408,11 +1423,19 @@ export async function updateListSettings(listId: string, viewer: UserProfile, pa
   await db.put("lists", {
     ...list,
     visibility: result.data.publicEnabled ? "public_link" : result.data.visibility,
-    publicToken: result.data.publicEnabled ? list.publicToken ?? makeId("public") : null,
+    publicToken: result.data.publicEnabled ? list.publicToken ?? createShareToken("public") : null,
     dailyReminderEnabled: result.data.dailyReminderEnabled,
     dailyReminderHour: result.data.dailyReminderHour,
     updatedAt: new Date().toISOString(),
   });
+  return { ok: true, publicToken: null };
+}
+
+export async function rotatePublicListToken(listId: string, viewer: UserProfile) {
+  if (!hasFirebaseEnv() || viewer.id === GUEST_USER_ID) {
+    throw new Error("公開リンクを作るにはログインが必要です。");
+  }
+  return requestJson<{ token: string }>(`/api/lists/${listId}/public-token`, { method: "POST" });
 }
 
 export async function buildTodayDigests(viewer: UserProfile): Promise<ReminderDigest[]> {

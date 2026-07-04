@@ -135,6 +135,7 @@ export type ShoppingListSnapshot = {
 export type ListInvite = {
   token: string;
   url: string;
+  expiresAt?: string;
 };
 
 export type ReminderItemGroup = {

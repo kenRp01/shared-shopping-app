@@ -55,8 +55,9 @@ describe("shareMemberSchema", () => {
 });
 
 describe("inviteTokenSchema", () => {
-  it("accepts URL-safe invite tokens only", () => {
-    expect(inviteTokenSchema.safeParse({ token: "invite_abc-123XYZ" }).success).toBe(true);
+  it("accepts only 256-bit invite tokens", () => {
+    expect(inviteTokenSchema.safeParse({ token: `invite_${"a".repeat(64)}` }).success).toBe(true);
+    expect(inviteTokenSchema.safeParse({ token: "invite_abc-123XYZ" }).success).toBe(false);
     expect(inviteTokenSchema.safeParse({ token: "bad token!" }).success).toBe(false);
   });
 });

@@ -14,7 +14,11 @@ export const shareMemberSchema = z.object({
 });
 
 export const inviteTokenSchema = z.object({
-  token: z.string().min(8).max(80).regex(/^[a-zA-Z0-9_-]+$/),
+  token: z.string().regex(/^invite_[a-f0-9]{64}$/),
+});
+
+export const publicTokenSchema = z.object({
+  token: z.string().regex(/^public_[a-f0-9]{64}$/),
 });
 
 export const emailAuthSchema = z.object({

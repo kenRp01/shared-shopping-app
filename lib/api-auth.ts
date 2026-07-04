@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getD1Database, resolveD1FirebaseProfile } from "@/lib/d1";
-import { isFirebaseIdToken, verifyFirebaseIdToken } from "@/lib/firebase-token";
+import { isFirebaseIdToken, UnverifiedFirebaseEmailError, verifyFirebaseIdToken } from "@/lib/firebase-token";
 
 export type AuthViewer = {
   id: string;
@@ -57,7 +57,10 @@ export async function getBearerViewer(request: NextRequest | Request) {
         provider: "firebase" as const,
       },
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof UnverifiedFirebaseEmailError) {
+      return { error: NextResponse.json({ error: "メール認証を完了してからログインしてください。" }, { status: 403 }) };
+    }
     return { error: NextResponse.json({ error: "ログイン情報を確認できませんでした。" }, { status: 401 }) };
   }
 }

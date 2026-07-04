@@ -62,4 +62,12 @@ describe("verifyFirebaseIdToken", () => {
       "sub",
     );
   });
+
+  it("rejects a correctly signed token when the email is unverified", async () => {
+    const { token, publicKey } = await createToken({ email_verified: false });
+
+    await expect(verifyFirebaseIdToken(token, { projectId, key: publicKey, currentDate: now })).rejects.toThrow(
+      "メール認証",
+    );
+  });
 });

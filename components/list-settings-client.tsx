@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import QRCode from "qrcode";
-import { getCurrentUser, getListSettingsSnapshot, updateListSettings, addListMember, removeList, updateUserProfile, createListInvite } from "@/lib/local-store";
+import { getCurrentUser, getListSettingsSnapshot, updateListSettings, addListMember, removeList, updateUserProfile, createListInvite, rotatePublicListToken } from "@/lib/local-store";
 import type { ListInvite, ShoppingListOverview, ShoppingListSnapshot, UserProfile } from "@/lib/types";
 
 type Props = {
@@ -64,6 +64,7 @@ export function ListSettingsClient({ listId }: Props) {
   const [categories, setCategories] = useState<ShoppingListOverview[]>(initialCache?.categories ?? []);
   const [shareEmail, setShareEmail] = useState("");
   const [invite, setInvite] = useState<ListInvite | null>(null);
+  const [issuedPublicToken, setIssuedPublicToken] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [publicQrDataUrl, setPublicQrDataUrl] = useState<string | null>(null);
   const [origin, setOrigin] = useState("");
@@ -146,7 +147,8 @@ export function ListSettingsClient({ listId }: Props) {
     };
   }, [invite?.url]);
 
-  const publicUrl = snapshot?.list.publicToken ? `${origin}/public/${snapshot.list.publicToken}` : null;
+  const visiblePublicToken = issuedPublicToken ?? snapshot?.list.publicToken ?? null;
+  const publicUrl = visiblePublicToken ? `${origin}/public/${visiblePublicToken}` : null;
 
   useEffect(() => {
     let active = true;
@@ -316,12 +318,18 @@ export function ListSettingsClient({ listId }: Props) {
               if (!user) {
                 throw new Error("ログインが必要です。");
               }
-              await updateListSettings(listId, user, {
+              const publicEnabled = formData.get("publicEnabled") === "on";
+              const updated = await updateListSettings(listId, user, {
                 dailyReminderEnabled: formData.get("dailyReminderEnabled") === "on",
                 dailyReminderHour: String(formData.get("dailyReminderHour") ?? "08:00"),
                 visibility: String(formData.get("visibility") ?? "shared") as "private" | "shared" | "public_link",
-                publicEnabled: formData.get("publicEnabled") === "on",
+                publicEnabled,
               });
+              if (!publicEnabled) {
+                setIssuedPublicToken(null);
+              } else if (updated?.publicToken) {
+                setIssuedPublicToken(updated.publicToken);
+              }
               await refresh(user);
               setMessage("設定を更新しました。");
             } catch (error) {
@@ -357,18 +365,41 @@ export function ListSettingsClient({ listId }: Props) {
           </label>
           <label className="settings-toggle-row">
             <span>Enable Public Link</span>
-            <input name="publicEnabled" type="checkbox" defaultChecked={Boolean(snapshot.list.publicToken)} />
+            <input name="publicEnabled" type="checkbox" defaultChecked={snapshot.list.visibility === "public_link"} />
           </label>
-          {snapshot.list.publicToken ? (
+          {visiblePublicToken ? (
             <div className="settings-public-url">
               <span>Public URL</span>
               <strong>{publicUrl}</strong>
-              <Link href={`/public/${snapshot.list.publicToken}`} className="text-link">
+              <Link href={`/public/${visiblePublicToken}`} className="text-link">
                 <OpenIcon />
                 Open Public Page
               </Link>
               {publicQrDataUrl ? <img className="invite-qr" src={publicQrDataUrl} alt="公開リンクのQRコード" /> : null}
             </div>
+          ) : null}
+          {snapshot.list.visibility === "public_link" ? (
+            <button
+              type="button"
+              className="ghost-button compact-button"
+              disabled={isPending}
+              onClick={() => {
+                startTransition(async () => {
+                  try {
+                    if (!user) {
+                      throw new Error("ログインが必要です。");
+                    }
+                    const result = await rotatePublicListToken(listId, user);
+                    setIssuedPublicToken(result.token);
+                    setMessage("公開リンクを発行しました。以前のリンクは無効です。");
+                  } catch (error) {
+                    setMessage(error instanceof Error ? error.message : "公開リンクを発行できませんでした。");
+                  }
+                });
+              }}
+            >
+              {visiblePublicToken ? "公開リンクを再発行" : "公開リンクを表示するため再発行"}
+            </button>
           ) : null}
           <button type="submit" className="primary-button settings-save-button" disabled={isPending}>
             {isPending ? "Saving..." : "Save List Settings"}
@@ -446,6 +477,7 @@ export function ListSettingsClient({ listId }: Props) {
                   ) : null}
                 </div>
                 {invite?.url ? <code className="invite-url">{invite.url}</code> : null}
+                {invite?.expiresAt ? <p>このリンクは7日間有効です。再発行すると以前のリンクは無効になります。</p> : null}
                 {qrDataUrl ? <img className="invite-qr" src={qrDataUrl} alt="共有招待リンクのQRコード" /> : null}
               </div>
               <label className="settings-field">
