@@ -1,9 +1,41 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"main": ".open-next/worker.js",
+	"main": "custom-worker.ts",
 	"name": "shareshopi",
 	"compatibility_date": "2026-06-09",
 	"keep_vars": true,
+	"secrets": {
+		"required": [
+			"CRON_SECRET",
+			"RESEND_API_KEY",
+			"REMINDER_FROM_EMAIL",
+			"NEXT_PUBLIC_FIREBASE_API_KEY",
+			"NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
+			"NEXT_PUBLIC_FIREBASE_PROJECT_ID",
+			"NEXT_PUBLIC_FIREBASE_APP_ID"
+		]
+	},
+	"triggers": {
+		"crons": ["0 23 * * *"]
+	},
+	"ratelimits": [
+		{
+			"name": "API_RATE_LIMITER",
+			"namespace_id": "742051",
+			"simple": {
+				"limit": 120,
+				"period": 60
+			}
+		},
+		{
+			"name": "SENSITIVE_API_RATE_LIMITER",
+			"namespace_id": "742052",
+			"simple": {
+				"limit": 15,
+				"period": 60
+			}
+		}
+	],
 	"compatibility_flags": [
 		"nodejs_compat",
 		"global_fetch_strictly_public"

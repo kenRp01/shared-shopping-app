@@ -73,4 +73,6 @@ npm run test:e2e
 npm run cf:build
 ```
 
+日次リマインドはCloudflare Cronが毎日08:00 JSTに実行します。Cron設定と確認方法は`OPERATIONS.md`を参照してください。
+
 本番デプロイはローカル確認後、明示的に実施します。
