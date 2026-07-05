@@ -3772,6 +3772,109 @@ code {
   }
 }
 
+@media (min-width: 901px) {
+  .page-shell:has(.list-carousel-stage) {
+    padding-inline: clamp(28px, 5vw, 72px);
+  }
+
+  .page-shell:has(.list-carousel-stage) main {
+    width: 100%;
+    max-width: 1180px;
+  }
+
+  .page-shell:has(.list-carousel-stage) .topbar {
+    width: min(100%, 1180px);
+    margin-inline: auto;
+  }
+
+  .list-carousel-stage .category-card-rail {
+    gap: 24px;
+    margin-inline: 0;
+    padding: 8px 18px 22px;
+    scroll-padding-inline: 18px;
+  }
+
+  .list-carousel-stage .category-card-rail::after {
+    content: "";
+    flex: 0 0 calc(100% - 448px);
+  }
+
+  .list-carousel-stage .category-card {
+    width: 430px;
+    min-height: min(68vh, 640px);
+    padding: 38px 34px;
+  }
+
+  .list-carousel-stage .category-card-live {
+    min-height: min(68vh, 640px);
+  }
+
+  .list-carousel-stage .category-card-title {
+    font-size: 2.25rem;
+  }
+
+  .list-carousel-stage .category-carousel-dots {
+    right: max(32px, calc((100vw - 1180px) / 2 + 32px));
+  }
+
+  .page-shell:has(.settings-shell) {
+    padding-inline: clamp(32px, 6vw, 88px);
+  }
+
+  .page-shell:has(.settings-shell) main {
+    width: 100%;
+    max-width: 1080px;
+  }
+
+  .settings-shell {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    column-gap: 28px;
+    row-gap: 22px;
+  }
+
+  .settings-appbar,
+  .settings-notice,
+  .settings-navigation-section,
+  .settings-sharing-section,
+  .settings-delete-section {
+    grid-column: 1 / -1;
+  }
+
+  .settings-navigation-section .settings-nav-card {
+    max-width: none;
+  }
+
+  .settings-user-section,
+  .settings-preferences-section {
+    height: 100%;
+  }
+
+  .settings-user-section .settings-card {
+    min-height: 210px;
+  }
+
+  .settings-sharing-card {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.72fr);
+    align-items: start;
+  }
+
+  .settings-sharing-card .settings-invite-card,
+  .settings-sharing-card .settings-login-box,
+  .settings-sharing-card .settings-member-list {
+    grid-column: 1 / -1;
+  }
+
+  .page-shell:has(.auth-layout) main {
+    width: 100%;
+    max-width: 620px;
+  }
+
+  .auth-layout .auth-card {
+    padding: 38px;
+  }
+}
+
 @media (max-width: 560px) {
   input,
   select,

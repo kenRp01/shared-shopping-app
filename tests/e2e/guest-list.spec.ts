@@ -113,6 +113,55 @@ test.describe("Guest shopping list", () => {
     expect(metrics.columns.split(" ").length).toBe(1);
   });
 
+  test("uses a desktop workspace without stretching the mobile layout", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium", "PCレイアウト専用");
+
+    await openGuestList(page);
+
+    const listLayout = await page.locator(".list-carousel-stage").evaluate((stage) => {
+      const main = stage.closest("main");
+      const rail = stage.querySelector(".category-card-rail");
+      const cards = Array.from(stage.querySelectorAll(".category-card"));
+      const firstCard = cards[0];
+      const viewportWidth = document.documentElement.clientWidth;
+      const visibleCards = cards.filter((card) => {
+        const rect = card.getBoundingClientRect();
+        return rect.right > 0 && rect.left < viewportWidth;
+      });
+
+      return {
+        mainWidth: main?.getBoundingClientRect().width ?? 0,
+        cardWidth: firstCard?.getBoundingClientRect().width ?? 0,
+        railWidth: rail?.getBoundingClientRect().width ?? 0,
+        visibleCardCount: visibleCards.length,
+        pageOverflows: document.documentElement.scrollWidth > viewportWidth,
+      };
+    });
+
+    expect(listLayout.mainWidth).toBeGreaterThan(900);
+    expect(listLayout.cardWidth).toBeGreaterThanOrEqual(400);
+    expect(listLayout.cardWidth).toBeLessThanOrEqual(460);
+    expect(listLayout.railWidth).toBeGreaterThan(900);
+    expect(listLayout.visibleCardCount).toBeGreaterThanOrEqual(2);
+    expect(listLayout.pageOverflows).toBe(false);
+
+    const listPath = new URL(page.url()).pathname;
+    await page.goto(`${listPath}/settings`);
+    await expect(page.locator(".settings-shell")).toBeVisible();
+
+    const settingsLayout = await page.locator(".settings-shell").evaluate((shell) => {
+      const main = shell.closest("main");
+      const style = getComputedStyle(shell);
+      return {
+        mainWidth: main?.getBoundingClientRect().width ?? 0,
+        columns: style.gridTemplateColumns.split(" ").filter(Boolean).length,
+      };
+    });
+
+    expect(settingsLayout.mainWidth).toBeGreaterThan(900);
+    expect(settingsLayout.columns).toBe(2);
+  });
+
   test("switches between default guest lists", async ({ page }) => {
     await openGuestList(page);
 

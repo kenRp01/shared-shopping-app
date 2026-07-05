@@ -267,7 +267,7 @@ export function ListSettingsClient({ listId }: Props) {
 
       {message ? <p className="settings-notice">{message}</p> : null}
 
-      <section className="settings-section">
+      <section className="settings-section settings-navigation-section">
         <p className="settings-section-title">LIST SETTINGS</p>
         <a href="#sharing" className="settings-nav-card">
           <span className="settings-nav-icon">
@@ -282,7 +282,7 @@ export function ListSettingsClient({ listId }: Props) {
       </section>
 
       <form
-        className="settings-section"
+        className="settings-section settings-user-section"
         action={() => {
           startTransition(async () => {
             try {
@@ -311,7 +311,7 @@ export function ListSettingsClient({ listId }: Props) {
       </form>
 
       <form
-        className="settings-section"
+        className="settings-section settings-preferences-section"
         action={(formData) => {
           startTransition(async () => {
             try {
@@ -409,7 +409,7 @@ export function ListSettingsClient({ listId }: Props) {
 
       <form
         id="sharing"
-        className="settings-section"
+        className="settings-section settings-sharing-section"
         action={() => {
           startTransition(async () => {
             try {
@@ -507,7 +507,7 @@ export function ListSettingsClient({ listId }: Props) {
       </form>
 
       {canDeleteList ? (
-        <section className="settings-section">
+        <section className="settings-section settings-delete-section">
           <p className="settings-section-title">DELETE</p>
           <div className="settings-card settings-delete-card">
           <button
