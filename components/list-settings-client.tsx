@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import QRCode from "qrcode";
+import { FullScreenAppLoader } from "@/components/app-loader";
 import { getCurrentUser, getListSettingsSnapshot, updateListSettings, addListMember, removeList, updateUserProfile, createListInvite, rotatePublicListToken } from "@/lib/local-store";
 import type { ListInvite, ShoppingListOverview, ShoppingListSnapshot, UserProfile } from "@/lib/types";
 
@@ -182,31 +183,7 @@ export function ListSettingsClient({ listId }: Props) {
   }, [publicUrl]);
 
   if (isLoading) {
-    return (
-      <div className="page-grid settings-shell">
-        <section className="settings-appbar" aria-label="設定ヘッダー">
-          <Link href="/" className="settings-back-link" aria-label="トップへ戻る">
-            <BackIcon />
-          </Link>
-          <div>
-            <h2>Settings</h2>
-            <p>読み込み中</p>
-          </div>
-          <button
-            type="button"
-            className="settings-theme-button"
-            onClick={toggleTheme}
-            aria-label={theme === "dark" ? "ライトモードに切り替え" : "ダークモードに切り替え"}
-            title={theme === "dark" ? "ライトモード" : "ダークモード"}
-          >
-            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-          </button>
-        </section>
-        <section className="settings-card settings-status-card" aria-live="polite">
-          <strong>設定を読み込んでいます</strong>
-        </section>
-      </div>
-    );
+    return <FullScreenAppLoader label="設定を読み込んでいます" />;
   }
 
   if (!snapshot || snapshot.permission !== "edit") {

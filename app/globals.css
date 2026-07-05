@@ -392,6 +392,18 @@ main {
     var(--page-bg);
 }
 
+/* Loading must never expose the previous page chrome behind the overlay. */
+body:has(.app-loading-screen) .page-shell > .topbar {
+  display: none;
+}
+
+body:has(.app-loading-screen) .page-shell > main {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
 .app-loading-screen-error {
   align-content: center;
 }

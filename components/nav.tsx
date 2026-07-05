@@ -52,11 +52,12 @@ export function Nav() {
   }
 
   return (
-    <header className="topbar">
-      <Link href="/" aria-label="トップへ戻る">
-        <Logo />
-      </Link>
-      <nav className="topnav">
+    <>
+      <header className="topbar">
+        <Link href="/" aria-label="トップへ戻る">
+          <Logo />
+        </Link>
+        <nav className="topnav">
         <button
           type="button"
           className="ghost-button nav-icon-link theme-toggle-button"
@@ -95,9 +96,10 @@ export function Nav() {
             </Link>
           </>
         )}
-      </nav>
+        </nav>
+      </header>
       {isSigningOut ? <FullScreenAppLoader label="ログアウトしています" /> : null}
-    </header>
+    </>
   );
 }
 

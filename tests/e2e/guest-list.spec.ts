@@ -26,6 +26,8 @@ test.describe("Guest shopping list", () => {
     await expect(page.locator(".redirect-loader")).toHaveCount(0);
     await expect(page.locator(".app-loader")).toBeVisible();
     await expect(page.locator(".app-loader-bag")).toBeVisible();
+    await expect(page.locator(".topbar")).toBeHidden();
+    await expect(page.locator("main > :not(.app-loading-screen)")).toHaveCount(0);
     const loaderShell = await page.locator(".app-loading-screen").evaluate((node) => {
       const style = getComputedStyle(node);
       const rect = node.getBoundingClientRect();
@@ -56,6 +58,7 @@ test.describe("Guest shopping list", () => {
     await page.goto("/lists/list_first_paint_check", { waitUntil: "domcontentloaded" });
 
     await expect(page.locator(".app-loader")).toBeVisible();
+    await expect(page.locator(".topbar")).toBeHidden();
     await expect(page.locator(".category-card-skeleton")).toHaveCount(0);
     await expect(page.locator(".page-grid.detail-shell > .panel.list-section-panel")).toHaveCount(0);
   });
