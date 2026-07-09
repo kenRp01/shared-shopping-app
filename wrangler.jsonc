@@ -1,20 +1,9 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"main": "custom-worker.ts",
-	"name": "shareshopi",
+	"name": "app",
 	"compatibility_date": "2026-06-09",
 	"keep_vars": true,
-	"secrets": {
-		"required": [
-			"CRON_SECRET",
-			"RESEND_API_KEY",
-			"REMINDER_FROM_EMAIL",
-			"NEXT_PUBLIC_FIREBASE_API_KEY",
-			"NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
-			"NEXT_PUBLIC_FIREBASE_PROJECT_ID",
-			"NEXT_PUBLIC_FIREBASE_APP_ID"
-		]
-	},
 	"triggers": {
 		"crons": ["0 23 * * *"]
 	},
@@ -49,7 +38,7 @@
 			// Self-reference service binding, the service name must match the worker name
 			// see https://opennext.js.org/cloudflare/caching
 			"binding": "WORKER_SELF_REFERENCE",
-			"service": "shareshopi"
+			"service": "app"
 		}
 	],
 	"images": {

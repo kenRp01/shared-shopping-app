@@ -26,6 +26,8 @@ Cloudflare環境で確認する場合:
 npm run cf:preview
 ```
 
+本番URLは `https://app.shareshopi.workers.dev` です。
+
 ## 環境変数
 
 公開可能なFirebase Web設定:

@@ -8,26 +8,27 @@ ShareShopi を無料枠中心で運用するための前提、制約、設計ル
 - 最初は完全無料に近い構成で開始する。
 - 利用者が増えるまでは、重い処理や高頻度通知を入れない。
 - 無料枠を超えそうな機能は、実装前に必ず運用コストを確認する。
-- 商用化やユーザー増加の前に、有料化または Cloudflare への本格移行を判断する。
+- 商用化やユーザー増加の前に、無料枠の上限と有料化条件を確認する。
 - APIキー、シークレット、環境変数の値は GitHub、README、公開ページに書かない。
 
 ## 現在の無料運用構成
 
 | 領域 | 現在の構成 | 無料運用上の注意 |
 | --- | --- | --- |
-| ホスティング | Vercel Hobby | 個人・非商用向け。商用化時は Pro か移行が必要 |
-| DB/Auth | Supabase Free | Free プロジェクトは pause される可能性がある |
+| Frontend/API | Cloudflare Workers + OpenNext | 無料枠のリクエスト数とCPU時間を超えないようにする |
+| DB | Cloudflare D1 | DB容量、読み書き回数、バックアップ方針を確認する |
+| Auth | Firebase Auth | 無料枠で始められるが、本人確認や不正利用対策は別途確認する |
 | メール | Resend Free | 送信数と送信元ドメインに制約がある |
-| Cron | Vercel Cron / Cloudflare heartbeat | 高頻度実行は避ける |
-| ドメイン | `shareshopi.vercel.app` / `workers.dev` | 独自ドメインは基本的に取得費が必要 |
+| Cron | Cloudflare Cron Triggers | 高頻度実行は避ける |
+| ドメイン | `app.shareshopi.workers.dev` | 独自ドメインは基本的に取得費が必要 |
 
-## 将来の無料優先アーキテクチャ
+## 無料優先アーキテクチャ
 
-商用化や Supabase pause 対策を見据え、最終的には以下の構成を候補にします。
+現在は以下の構成を基準にします。
 
-| 領域 | 移行候補 | 理由 |
+| 領域 | 採用サービス | 理由 |
 | --- | --- | --- |
-| Frontend/API | Cloudflare Workers + OpenNext | Vercel Hobby の商用制約を避けやすい |
+| Frontend/API | Cloudflare Workers + OpenNext | Workers上でWeb/APIをまとめて運用できる |
 | DB | Cloudflare D1 | Cloudflare Workers と相性がよい |
 | Auth | Firebase Auth | Googleログイン・メールログインを無料枠で始めやすい |
 | Mail | Resend | 問い合わせ、リマインド送信に使う |
@@ -98,10 +99,10 @@ ShareShopi を無料枠中心で運用するための前提、制約、設計ル
 
 以下に当てはまる場合は、無料運用の継続ではなく有料化または移行を検討します。
 
-- Vercel Hobby の商用制約に抵触する。
-- Supabase Free の pause が運用リスクになる。
+- Cloudflare Workers のリクエスト数やCPU時間が無料枠に近づく。
+- D1の容量や読み書き回数が無料枠に近づく。
 - メール送信数が Resend Free の無料枠に近づく。
-- DB容量やクエリ数が無料枠に近づく。
+- Firebase Auth の無料枠や本人確認要件に近づく。
 - 利用者から安定稼働を求められる。
 - 問い合わせ対応やデータ削除対応が増える。
 - 独自ドメインやブランド運用が必要になる。
@@ -110,8 +111,8 @@ ShareShopi を無料枠中心で運用するための前提、制約、設計ル
 
 商用化する場合は、無料運用とは別に以下を確認します。
 
-- Vercel Pro へ上げる、または Cloudflare へ移行する。
-- Supabase継続なら Pro 化または pause 対策を行う。
+- Cloudflare Workers / D1 / Firebase Auth / Resend の利用量を確認する。
+- 無料枠を超える場合の有料化ラインを決める。
 - 独自ドメインを取得する。
 - Resend の送信元ドメインを認証する。
 - 利用規約、プライバシーポリシー、問い合わせ導線を整える。
@@ -121,5 +122,5 @@ ShareShopi を無料枠中心で運用するための前提、制約、設計ル
 
 ## 判断メモ
 
-短期の限定利用では、現在の構成でも無料に近い運用ができます。
-ただし、商用化を考える場合は Vercel Hobby と Supabase Free の制約が大きいため、Cloudflare Workers + D1 + Firebase Auth への移行を優先候補にします。
+短期の限定利用では、現在の構成で無料に近い運用ができます。
+ただし、商用化を考える場合は各サービスの無料枠、利用規約、送信ドメイン、問い合わせ対応、データ削除対応を必ず確認します。

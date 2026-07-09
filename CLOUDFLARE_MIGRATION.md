@@ -46,7 +46,7 @@ npx wrangler secret put CRON_SECRET
 Firebase Consoleの`Authentication > Settings > Authorized domains`へ次を追加します。
 
 - ローカル確認用ホスト
-- `shareshopi.shareshopi.workers.dev`
+- `app.shareshopi.workers.dev`
 - 利用する独自ドメイン
 
 Googleとメール/パスワードのSign-in providerを有効化します。
