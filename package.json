@@ -13,6 +13,8 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test tests/e2e/public-pages.spec.ts tests/e2e/production-smoke.spec.ts --project=chromium",
+    "test:e2e:prod": "E2E_BASE_URL=https://app.shareshopi.workers.dev E2E_SKIP_WEB_SERVER=1 playwright test tests/e2e/production-smoke.spec.ts --project=chromium",
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",

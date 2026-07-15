@@ -107,6 +107,20 @@ ShareShopi を無料枠中心で運用するための前提、制約、設計ル
 - 問い合わせ対応やデータ削除対応が増える。
 - 独自ドメインやブランド運用が必要になる。
 
+## 週次の無料枠チェック
+
+毎週1回、以下を確認します。数値はサービス側で変わる可能性があるため、最新のDashboard表示を正とします。
+
+| 対象 | 確認先 | 見る項目 |
+| --- | --- | --- |
+| Workers | `Workers & Pages > app > Metrics` | リクエスト数、CPU時間、エラー率 |
+| Cron | `Workers & Pages > app > Settings > Triggers > Cron Events` | 実行成功、失敗、連続失敗 |
+| D1 | `Storage & Databases > D1 > shareshopi-prod` | 読み取り回数、書き込み回数、DB容量 |
+| Firebase Auth | `Firebase Console > Authentication` | ユーザー数、ログイン失敗、未確認メール |
+| Resend | `Resend > Logs` | 送信数、失敗、バウンス、無料枠残量 |
+
+無料枠に近づいた場合は、まず高頻度処理、メール送信数、重いAPI呼び出しを減らします。それでも足りない場合に有料化または構成変更を検討します。
+
 ## 商用化前の最低条件
 
 商用化する場合は、無料運用とは別に以下を確認します。

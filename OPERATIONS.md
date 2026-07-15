@@ -15,13 +15,21 @@
 - Resend: 送信成功、失敗、バウンス、無料枠残量。
 - アプリ: Google/メールログイン、共有追加、商品追加、購入済み化、公開リンク閲覧。
 
+確認先:
+
+- `Workers & Pages > app > Logs`: APIエラー、例外、拒否された更新系リクエストを確認する。
+- `Workers & Pages > app > Settings > Triggers > Cron Events`: 日次リマインドの実行履歴を確認する。
+- `Storage & Databases > D1 > shareshopi-prod`: 読み書き回数、容量、マイグレーション状態を確認する。
+- `Firebase Console > Authentication`: ユーザー数、ログイン方法、メール確認状態を確認する。
+- `Resend > Logs`: 送信成功、失敗、バウンス、無料枠残量を確認する。
+
 ## リマインドCron
 
 - `wrangler.jsonc`の`0 23 * * *`で毎日23:00 UTC（08:00 JST）に実行する。
 - Custom Workerの`scheduled()`が内部の`GET /api/reminders/digest`を呼び出す。
 - `Authorization: Bearer <CRON_SECRET>`で保護する。
 - 同じ`list_id`と`delivery_date`への重複送信は`reminder_delivery_logs`で防ぐ。
-- 実行履歴は`Workers & Pages > shareshopi > Settings > Triggers > Cron Events`で確認する。
+- 実行履歴は`Workers & Pages > app > Settings > Triggers > Cron Events`で確認する。
 
 ローカル確認:
 
@@ -29,6 +37,12 @@
 npm run cf:build
 npx wrangler dev --test-scheduled
 curl "http://localhost:8787/cdn-cgi/handler/scheduled?cron=0+23+*+*+*&format=json"
+```
+
+本番URLの最低限確認:
+
+```bash
+npm run test:e2e:prod
 ```
 
 ## 招待・公開リンク
@@ -59,4 +73,34 @@ curl "http://localhost:8787/cdn-cgi/handler/scheduled?cron=0+23+*+*+*&format=jso
 
 - ドキュメントだけの変更ではデプロイしない。
 - コード変更は`npm test`、`npm run test:e2e`、`npm run build`、`npm run cf:build`を確認する。
+- 公開前の軽量確認は`npm run test:e2e:smoke`を実行する。
+- 本番反映後の軽量確認は`npm run test:e2e:prod`を実行する。
+- `wrangler.jsonc`のbindingやCloudflare設定を変更した場合は`npm run cf:typegen`を実行し、ローカルの`cloudflare-env.d.ts`を再生成する。
 - 秘密情報は`.env.local`とCloudflare Secretsだけに保存し、GitHubへpushしない。
+
+## CI/CD
+
+GitHub ActionsはCIとデプロイを分ける。
+
+- CI: main pushとPull Requestで`npm test`、`npx tsc --noEmit`、`npm run build`、`npm run test:e2e:smoke`、`npm run cf:build`を実行する。
+- Deploy: main pushまたは手動実行で、検証後に`npm run cf:deploy`を実行する。
+- GitHub Secretsには`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`だけを設定する。
+- Firebaseの公開値はGitHub VariablesまたはSecretsに設定する。
+- Worker実行時の`CRON_SECRET`、`RESEND_API_KEY`、`REMINDER_FROM_EMAIL`はCloudflare側へ設定する。
+
+## D1バックアップ
+
+本番DBのバックアップは手元にSQLとして書き出す。
+
+```bash
+mkdir -p backups
+npx wrangler d1 export shareshopi-prod --remote --output "backups/shareshopi-prod-$(date +%Y%m%d).sql"
+```
+
+`backups/`はGit管理対象外にする。復元や移行前は、必ずバックアップファイルの存在とサイズを確認する。
+
+## 独自ドメイン準備
+
+現在の無料URLは`https://app.shareshopi.workers.dev`。
+
+独自ドメインを使う場合は、先にドメインを取得し、CloudflareのDNS管理へ追加する。その後、`Workers & Pages > app > Settings > Domains & Routes`からCustom DomainまたはRouteを設定する。Firebase AuthのAuthorized domainsにも同じドメインを追加する。

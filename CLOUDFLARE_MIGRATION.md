@@ -41,6 +41,12 @@ npx wrangler secret put CRON_SECRET
 
 `NEXT_PUBLIC_*`はビルド時にも必要なため、ローカルでは`.env.local`へ設定してから`npm run cf:build`を実行します。
 
+`wrangler.jsonc`のbinding、Variables、Secrets、D1設定を変更した場合は、ローカルの型が古くならないようにCloudflare binding型を再生成します。`cloudflare-env.d.ts`は生成物のためGit管理しません。
+
+```bash
+npm run cf:typegen
+```
+
 ## Firebase設定
 
 Firebase Consoleの`Authentication > Settings > Authorized domains`へ次を追加します。
