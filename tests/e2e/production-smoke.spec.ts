@@ -6,8 +6,13 @@ test.describe("Production smoke", () => {
 
     await page.goto("/");
 
-    await expect(page).toHaveTitle(/ShareShopi/);
-    await expect(page.locator(".app-loader, .topbar, .app-shell-title").first()).toBeVisible();
+    await expect(page).toHaveTitle(/共有できる買い物リストアプリ/);
+    await expect(page.getByRole("heading", { name: "買い物リストをみんなでシェア" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "すぐ使う" })).toHaveAttribute("href", "/app");
+    await expect(page.getByLabel("ShareShopiの画面イメージ")).toBeVisible();
+
+    await page.goto("/about");
+    await expect(page.getByRole("heading", { name: "ShareShopiは、買い物を共有しやすくするリストアプリです。" })).toBeVisible();
 
     const manifest = await request.get(`${origin}/site.webmanifest`);
     expect(manifest.ok()).toBe(true);
@@ -16,6 +21,10 @@ test.describe("Production smoke", () => {
     const favicon = await request.get(`${origin}/favicon-32x32.png`);
     expect(favicon.ok()).toBe(true);
     expect(favicon.headers()["content-type"]).toContain("image/png");
+
+    const llmsTxt = await request.get(`${origin}/llms.txt`);
+    expect(llmsTxt.ok()).toBe(true);
+    expect(await llmsTxt.text()).toContain("ShareShopi");
   });
 
   test("keeps legal and contact routes available", async ({ page }) => {

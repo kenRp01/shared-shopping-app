@@ -45,8 +45,16 @@ Worker Secret:
 通常のWorker変数:
 
 - `REMINDER_FROM_EMAIL`
+- `NEXT_PUBLIC_SITE_URL`
+- `NEXT_PUBLIC_GOOGLE_ADSENSE_CLIENT`
+- `NEXT_PUBLIC_GOOGLE_ADSENSE_SLOT_HOME`
+- `NEXT_PUBLIC_GOOGLE_ADSENSE_SLOT_LOGIN`
+- `NEXT_PUBLIC_GOOGLE_ADSENSE_SLOT_LEGAL`
+- `GOOGLE_ADSENSE_PUBLISHER_ID`
 
 秘密値は`.env.local`、`.dev.vars`、Cloudflare Dashboardまたは`wrangler secret put`で管理し、Gitへコミットしません。
+
+SEOと広告設定の詳細は`docs/seo-monetization.md`を参照してください。
 
 ## Firebase設定
 

@@ -1,3 +1,14 @@
+import type { Metadata } from "next";
+import { AdSlot } from "@/components/ad-slot";
+
+export const metadata: Metadata = {
+  title: "プライバシーポリシー",
+  description: "ShareShopiで扱うログイン情報、買い物リスト、共有メンバー、リマインド情報の取り扱いを説明します。",
+  alternates: {
+    canonical: "/privacy",
+  },
+};
+
 export default function PrivacyPage() {
   return (
     <div className="page-grid legal-page">
@@ -14,6 +25,7 @@ export default function PrivacyPage() {
         <p>リストの表示、共同編集、共有メンバーの判定、購入済み管理、リマインド通知の送信に利用します。</p>
 
       </section>
+      <AdSlot slot={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_SLOT_LEGAL} label="プライバシーページ広告" />
     </div>
   );
 }

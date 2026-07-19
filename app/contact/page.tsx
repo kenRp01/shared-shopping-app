@@ -1,4 +1,14 @@
+import type { Metadata } from "next";
+import { AdSlot } from "@/components/ad-slot";
 import { ContactForm } from "@/components/contact-form";
+
+export const metadata: Metadata = {
+  title: "問い合わせ",
+  description: "ShareShopiへの不具合報告、共有の相談、データ削除依頼を送信できます。",
+  alternates: {
+    canonical: "/contact",
+  },
+};
 
 export default function ContactPage() {
   return (
@@ -9,6 +19,7 @@ export default function ContactPage() {
 
         <ContactForm />
       </section>
+      <AdSlot slot={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_SLOT_LEGAL} label="問い合わせページ広告" />
     </div>
   );
 }

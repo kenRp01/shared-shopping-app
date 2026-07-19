@@ -1,3 +1,14 @@
+import type { Metadata } from "next";
+import { AdSlot } from "@/components/ad-slot";
+
+export const metadata: Metadata = {
+  title: "利用規約",
+  description: "ShareShopiの利用範囲、禁止事項、免責、規約変更について説明します。",
+  alternates: {
+    canonical: "/terms",
+  },
+};
+
 export default function TermsPage() {
   return (
     <div className="page-grid legal-page">
@@ -18,6 +29,7 @@ export default function TermsPage() {
         <h3>変更</h3>
         <p>規約を変更した場合は、アプリ内またはREADME等で知らせます。</p>
       </section>
+      <AdSlot slot={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_SLOT_LEGAL} label="利用規約ページ広告" />
     </div>
   );
 }

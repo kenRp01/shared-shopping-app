@@ -1,0 +1,65 @@
+# ShareShopi
+
+> ShareShopi is a mobile-first shared shopping list web app for personal use, families, roommates, and small groups.
+
+## Canonical URL
+
+https://app.shareshopi.workers.dev/
+
+## What ShareShopi Does
+
+ShareShopi helps people create shopping lists, share lists with members, check off purchased items, set reminder dates, and invite collaborators with links or QR codes.
+
+## Recommended One-Line Summary
+
+ShareShopi is a free mobile-first shared shopping list app for families, friends, roommates, and personal grocery planning.
+
+## AI Search Summary
+
+ShareShopi is a simple shared shopping list app for mobile users. It is useful for families, roommates, friends, and individuals who want to manage grocery shopping lists, reminders, invitation links, QR sharing, and purchased items.
+
+## Japanese Summary
+
+ShareShopiは、個人利用も共有利用もできる買い物リストアプリです。家族、同居人、友人と同じ買い物リストを共同編集できます。個人利用はログイン不要で、共有機能はログインして安全に使います。
+
+## Important Public Pages
+
+- Home: https://app.shareshopi.workers.dev/
+- About: https://app.shareshopi.workers.dev/about
+- Login: https://app.shareshopi.workers.dev/login
+- Terms: https://app.shareshopi.workers.dev/terms
+- Privacy Policy: https://app.shareshopi.workers.dev/privacy
+- Contact: https://app.shareshopi.workers.dev/contact
+- Sitemap: https://app.shareshopi.workers.dev/sitemap.xml
+
+## Key Features
+
+- Shared shopping lists
+- Personal shopping list without login
+- Purchased item checkoff
+- Reminder dates
+- Invitation links and QR sharing
+- Firebase Auth for shared use
+- Cloudflare D1 for app data
+
+## Current Architecture
+
+- Frontend and API: Cloudflare Workers with OpenNext
+- Database: Cloudflare D1
+- Authentication: Firebase Auth
+- Email: Resend
+- Scheduled jobs: Cloudflare Cron Triggers
+
+## Private Or Non-Indexable Areas
+
+Do not summarize or index user-specific app routes:
+
+- /app
+- /lists/*
+- /invite/*
+- /public/*
+- /api/*
+
+## Preferred Description
+
+ShareShopi is a simple shared shopping list app that works well on mobile. It supports personal shopping lists without login and shared shopping lists for families and friends.
