@@ -6,6 +6,7 @@ import { useEffect, useState, useTransition } from "react";
 import QRCode from "qrcode";
 import { FullScreenAppLoader } from "@/components/app-loader";
 import { getCurrentUser, getListSettingsSnapshot, updateListSettings, addListMember, removeList, updateUserProfile, createListInvite, rotatePublicListToken } from "@/lib/local-store";
+import { maskEmailAddress, privateMemberLabel } from "@/lib/privacy";
 import type { ListInvite, ShoppingListOverview, ShoppingListSnapshot, UserProfile } from "@/lib/types";
 
 type Props = {
@@ -282,7 +283,7 @@ export function ListSettingsClient({ listId }: Props) {
             <input value={profileName} onChange={(event) => setProfileName(event.target.value)} placeholder="Display Name" />
           </label>
           <button type="submit" className="primary-button settings-save-button" disabled={isPending}>
-            {isPending ? "Saving..." : "Save User Settings"}
+            {isPending ? "保存中..." : "名前を保存"}
           </button>
         </div>
       </form>
@@ -379,7 +380,7 @@ export function ListSettingsClient({ listId }: Props) {
             </button>
           ) : null}
           <button type="submit" className="primary-button settings-save-button" disabled={isPending}>
-            {isPending ? "Saving..." : "Save List Settings"}
+            {isPending ? "保存中..." : "リスト設定を保存"}
           </button>
         </div>
       </form>
@@ -459,7 +460,7 @@ export function ListSettingsClient({ listId }: Props) {
               </div>
               <label className="settings-field">
                 <span>Member Email</span>
-                <input type="email" value={shareEmail} onChange={(event) => setShareEmail(event.target.value)} placeholder="takumi@example.com" />
+                <input type="email" value={shareEmail} onChange={(event) => setShareEmail(event.target.value)} placeholder="friend@example.com" />
               </label>
               <button type="submit" className="primary-button settings-save-button" disabled={isPending}>
                 共有メンバーに追加
@@ -467,18 +468,23 @@ export function ListSettingsClient({ listId }: Props) {
             </>
           )}
           <div className="member-list settings-member-list">
-            {snapshot.members.map((member) => (
-              <div className="member-row settings-member-row" key={member.id}>
-                <div>
-                  <strong>{normalizeDisplayName(member.name)}</strong>
-                  <p>{member.email}</p>
+            {snapshot.members.map((member, index) => {
+              const isCurrentMember = Boolean(user && member.id === user.id);
+              return (
+                <div className="member-row settings-member-row" key={member.id}>
+                  <span className="settings-member-avatar" aria-hidden="true">
+                    {isCurrentMember ? "自" : index + 1}
+                  </span>
+                  <div>
+                    <strong>{privateMemberLabel(index, isCurrentMember)}</strong>
+                    <p className="settings-member-email">{maskEmailAddress(member.email)}</p>
+                  </div>
+                  <span className="tag settings-role-tag" aria-label={member.role === "owner" ? "所有者" : "編集者"}>
+                    {member.role === "owner" ? "所有者" : "編集者"}
+                  </span>
                 </div>
-                <span className="tag settings-role-tag">
-                  <span>Role</span>
-                  {member.role === "owner" ? "所有者" : "編集者"}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </form>

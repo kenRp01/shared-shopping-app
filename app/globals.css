@@ -3791,38 +3791,48 @@ code {
 
   .page-shell:has(.list-carousel-stage) main {
     width: 100%;
-    max-width: 1180px;
+    max-width: min(1280px, calc(100vw - 96px));
   }
 
   .page-shell:has(.list-carousel-stage) .topbar {
-    width: min(100%, 1180px);
+    width: min(100%, 1280px);
     margin-inline: auto;
   }
 
   .list-carousel-stage .category-card-rail {
-    gap: 24px;
-    margin-inline: 0;
-    padding: 8px 18px 22px;
-    scroll-padding-inline: 18px;
+    gap: 32px;
+    margin-inline: auto;
+    padding: 16px max(18px, calc((100% - 960px) / 2)) 32px;
+    scroll-padding-inline: max(18px, calc((100% - 960px) / 2));
   }
 
   .list-carousel-stage .category-card-rail::after {
     content: "";
-    flex: 0 0 calc(100% - 448px);
+    flex: 0 0 max(18px, calc(100% - min(960px, 78vw)));
+  }
+
+  .list-carousel-stage .category-pill-holder {
+    flex-basis: min(78vw, 960px);
   }
 
   .list-carousel-stage .category-card {
-    width: 430px;
-    min-height: min(68vh, 640px);
-    padding: 38px 34px;
+    width: 100%;
+    min-height: min(72vh, 700px);
+    padding: clamp(42px, 5vw, 64px);
+    border-radius: 44px;
   }
 
   .list-carousel-stage .category-card-live {
-    min-height: min(68vh, 640px);
+    min-height: min(72vh, 700px);
   }
 
   .list-carousel-stage .category-card-title {
-    font-size: 2.25rem;
+    font-size: clamp(2.4rem, 4.2vw, 4.2rem);
+  }
+
+  .list-carousel-stage .item-row-modern,
+  .list-carousel-stage .list-task-add-form {
+    max-width: 760px;
   }
 
   .list-carousel-stage .category-carousel-dots {
@@ -4293,5 +4303,255 @@ code {
 
   .seo-faq-strip {
     padding: 20px;
+  }
+}
+
+/* Settings page polish: compact cards, calmer buttons, and privacy-safe members. */
+.settings-card,
+.settings-nav-card {
+  border-radius: 26px;
+}
+
+.settings-card {
+  gap: 14px;
+  padding: 18px;
+}
+
+.settings-nav-card {
+  min-height: 84px;
+  padding: 18px;
+}
+
+.settings-save-button {
+  min-height: 44px;
+  border-radius: 16px;
+  font-size: 0.9rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  box-shadow: none;
+}
+
+.settings-sharing-card {
+  gap: 16px;
+}
+
+.settings-public-url {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  padding: 16px;
+}
+
+.settings-public-url > span,
+.settings-public-url > strong,
+.settings-public-url > .text-link {
+  grid-column: 1;
+}
+
+.settings-public-url .invite-qr {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  width: 112px;
+  height: 112px;
+}
+
+.settings-member-row {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+}
+
+.settings-member-avatar {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.18);
+  color: currentColor;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.settings-member-row strong {
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.settings-member-row p {
+  margin-top: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.82rem;
+  letter-spacing: -0.03em;
+}
+
+.settings-role-tag {
+  min-height: 30px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+}
+
+[data-theme="light"] .settings-member-avatar {
+  background: rgba(18, 51, 39, 0.07);
+}
+
+.settings-appbar {
+  max-width: 980px;
+  margin-inline: auto;
+}
+
+.settings-nav-card {
+  max-width: none;
+  border-radius: 24px;
+}
+
+.settings-nav-card strong {
+  font-weight: 680;
+}
+
+.settings-nav-card small {
+  font-weight: 500;
+}
+
+.settings-card {
+  border-radius: 24px;
+}
+
+.settings-field input,
+.settings-field select,
+.settings-time-input {
+  min-height: 46px;
+  border-radius: 15px;
+}
+
+.settings-time-input input {
+  min-width: 92px;
+  font-size: 1rem;
+}
+
+.settings-toggle-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.settings-save-button {
+  width: auto;
+  min-height: 42px;
+  justify-self: stretch;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.96), rgba(21, 128, 91, 0.96));
+  color: #ffffff;
+  font-size: 0.88rem;
+  font-weight: 680;
+  box-shadow: 0 12px 24px rgba(17, 95, 74, 0.16);
+}
+
+[data-theme="dark"] .settings-save-button {
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: none;
+}
+
+.settings-invite-card .ghost-button,
+.settings-login-box .primary-button {
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 13px;
+  font-size: 0.84rem;
+}
+
+.settings-public-url {
+  border-radius: 18px;
+}
+
+.settings-public-url strong,
+.invite-url {
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.settings-member-list {
+  gap: 10px;
+}
+
+@media (min-width: 960px) {
+  .page-shell:has(.settings-shell) main {
+    max-width: min(1040px, calc(100vw - 64px));
+  }
+
+  .settings-shell {
+    grid-template-columns: minmax(300px, 0.8fr) minmax(420px, 1.2fr);
+    column-gap: 20px;
+    row-gap: 18px;
+  }
+
+  .settings-user-section .settings-card {
+    min-height: 0;
+    align-content: start;
+  }
+
+  .settings-user-section,
+  .settings-preferences-section {
+    height: auto;
+  }
+
+  .settings-sharing-card {
+    grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
+  }
+
+  .settings-sharing-card .settings-invite-card,
+  .settings-sharing-card .settings-login-box {
+    grid-column: 1;
+  }
+
+  .settings-sharing-card > .settings-field,
+  .settings-sharing-card > .settings-save-button {
+    grid-column: 1;
+  }
+
+  .settings-sharing-card .settings-member-list {
+    grid-column: 2;
+    grid-row: 1 / span 4;
+    align-self: stretch;
+    align-content: start;
+  }
+
+  .settings-preferences-section .settings-card,
+  .settings-sharing-section .settings-card {
+    padding: 20px;
+  }
+
+  .settings-user-section .settings-save-button,
+  .settings-preferences-section .settings-save-button {
+    justify-self: end;
+    min-width: 180px;
+  }
+}
+
+@media (max-width: 720px) {
+  .settings-card {
+    padding: 18px;
+  }
+
+  .settings-public-url {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-public-url .invite-qr {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .settings-member-row {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    padding: 13px 14px;
+  }
+
+  .settings-member-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
   }
 }

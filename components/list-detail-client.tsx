@@ -121,7 +121,24 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const categoryScrollFrameRef = useRef<number | null>(null);
   const activeListIdRef = useRef(activeListId);
   const shouldScrollToActiveRef = useRef(false);
+  const locallyRemovedItemsRef = useRef(new Map<string, string>());
   const [, startTransition] = useTransition();
+
+  function filterLocallyRemovedItems(nextSnapshot: ShoppingListSnapshot | null) {
+    if (!nextSnapshot || locallyRemovedItemsRef.current.size === 0) {
+      return nextSnapshot;
+    }
+
+    const items = nextSnapshot.items.filter((item) => !locallyRemovedItemsRef.current.has(item.id));
+    if (items.length === nextSnapshot.items.length) {
+      return nextSnapshot;
+    }
+
+    return {
+      ...nextSnapshot,
+      items,
+    };
+  }
 
   async function refresh(currentUser?: UserProfile | null, options: { useCache?: boolean; listId?: string | null } = {}) {
     const targetListId = options.listId ?? activeListId;
@@ -134,7 +151,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
       const cacheKey = nextUser && targetListId && !publicToken ? detailCacheKey(nextUser.id, targetListId) : null;
       const cached = cacheKey ? detailCache.get(cacheKey) : null;
       if (options.useCache !== false && cached && Date.now() - cached.cachedAt < DETAIL_CACHE_TTL_MS) {
-        setSnapshot(cached.snapshot);
+        setSnapshot(filterLocallyRemovedItems(cached.snapshot));
         setCategories(cached.categories);
         setOptimisticListId(null);
         setIsResolvingList(false);
@@ -160,6 +177,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
         nextCategories = await listAccessibleLists(nextUser.id);
       }
 
+      nextSnapshot = filterLocallyRemovedItems(nextSnapshot);
       setCategories(nextCategories);
 
       if (!nextSnapshot && targetListId && !publicToken) {
@@ -202,14 +220,17 @@ export function ListDetailClient({ listId, publicToken }: Props) {
     }
   }
 
-  function removeItemFromView(itemId: string) {
-    setSnapshot((current) => {
-      if (!current) return current;
-      return {
-        ...current,
-        items: current.items.filter((item) => item.id !== itemId),
-      };
-    });
+  function removeItemFromView(itemId: string, itemListId: string) {
+    locallyRemovedItemsRef.current.set(itemId, itemListId);
+    detailRequests.delete(`${user?.id ?? "guest"}:${itemListId}`);
+    updateItemsInView((items) => items.filter((item) => item.id !== itemId));
+    updateCategoriesInView((current) =>
+      current.map((category) =>
+        category.id === itemListId
+          ? { ...category, pendingCount: Math.max(0, category.pendingCount - 1) }
+          : category,
+      ),
+    );
   }
 
   function toItemViewFromItem(item: ShoppingItem, fallbackUser: UserProfile): ShoppingItemView {
@@ -365,7 +386,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
     const cached = user ? detailCache.get(detailCacheKey(user.id, nextListId)) : null;
     setOptimisticListId(nextListId);
     if (cached && Date.now() - cached.cachedAt < DETAIL_CACHE_TTL_MS) {
-      setSnapshot(cached.snapshot);
+      setSnapshot(filterLocallyRemovedItems(cached.snapshot));
       setCategories(cached.categories);
       setOptimisticListId(null);
       setIsResolvingList(false);
@@ -492,8 +513,12 @@ export function ListDetailClient({ listId, publicToken }: Props) {
           if (!active || !bundle.snapshot) {
             return;
           }
+          const nextSnapshot = filterLocallyRemovedItems(bundle.snapshot);
+          if (!nextSnapshot) {
+            return;
+          }
           detailCache.set(cacheKey, {
-            snapshot: bundle.snapshot,
+            snapshot: nextSnapshot,
             categories: bundle.categories ?? categories,
             cachedAt: Date.now(),
           });
@@ -632,11 +657,12 @@ export function ListDetailClient({ listId, publicToken }: Props) {
           }}
           onToggle={async () => {
             if (!user) return;
-            removeItemFromView(item.id);
+            removeItemFromView(item.id, item.listId);
             try {
               await removeItem(snapshot.list.id, item.id, user);
-              await refresh(user, { useCache: false });
+              setMessage(null);
             } catch (error) {
+              locallyRemovedItemsRef.current.delete(item.id);
               await refresh(user, { useCache: false });
               setMessage(error instanceof Error ? error.message : "更新できませんでした。");
             }

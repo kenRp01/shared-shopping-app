@@ -5,7 +5,7 @@ async function openGuestList(page: Page) {
     localStorage.setItem("shareshopi:theme", "dark");
     document.documentElement.dataset.theme = "dark";
   });
-  await page.goto("/");
+  await page.goto("/app");
   await expect(page).toHaveURL(/\/lists\/list_/, { timeout: 20_000 });
   await expect(page.getByLabel("商品名")).toBeVisible();
   await expect(page.getByRole("heading", { name: "マイリスト", exact: true })).toBeVisible();
@@ -20,7 +20,7 @@ test.describe("Guest shopping list", () => {
       document.documentElement.dataset.theme = "dark";
     });
 
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/app", { waitUntil: "domcontentloaded" });
 
     await expect(page.locator(".landing-hero")).toHaveCount(0);
     await expect(page.locator(".redirect-loader")).toHaveCount(0);
@@ -75,6 +75,8 @@ test.describe("Guest shopping list", () => {
     await expect(itemButton).toBeVisible();
 
     await page.getByLabel(`${itemName} を購入済みにして一覧から外す`).click();
+    await expect(itemButton).toHaveCount(0, { timeout: 10_000 });
+    await page.reload();
     await expect(itemButton).toHaveCount(0, { timeout: 10_000 });
   });
 
@@ -141,9 +143,9 @@ test.describe("Guest shopping list", () => {
       };
     });
 
-    expect(listLayout.mainWidth).toBeGreaterThan(900);
-    expect(listLayout.cardWidth).toBeGreaterThanOrEqual(400);
-    expect(listLayout.cardWidth).toBeLessThanOrEqual(460);
+    expect(listLayout.mainWidth).toBeGreaterThan(1000);
+    expect(listLayout.cardWidth).toBeGreaterThanOrEqual(700);
+    expect(listLayout.cardWidth).toBeLessThanOrEqual(980);
     expect(listLayout.railWidth).toBeGreaterThan(900);
     expect(listLayout.visibleCardCount).toBeGreaterThanOrEqual(2);
     expect(listLayout.pageOverflows).toBe(false);
@@ -305,8 +307,9 @@ test.describe("Guest shopping list", () => {
     await expect(page.locator(".settings-public-card")).toBeVisible();
     await expect(page.getByText("Googleでログインしてください")).toBeVisible();
     await expect(page.getByRole("link", { name: "Googleでログイン" })).toHaveAttribute("href", "/login");
-    await expect(page.locator(".settings-role-tag").first()).toContainText("Role");
     await expect(page.locator(".settings-role-tag").first()).toContainText("所有者");
+    await expect(page.locator(".settings-member-email").first()).toContainText("***");
+    await expect(page.locator(".settings-member-email").first()).not.toContainText("@shareshopi.local");
 
     const settingsTheme = await page.locator(".page-shell").evaluate((shell) => {
       const navCard = document.querySelector(".settings-nav-card");
