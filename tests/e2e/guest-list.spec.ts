@@ -144,9 +144,9 @@ test.describe("Guest shopping list", () => {
     });
 
     expect(listLayout.mainWidth).toBeGreaterThan(1000);
-    expect(listLayout.cardWidth).toBeGreaterThanOrEqual(700);
-    expect(listLayout.cardWidth).toBeLessThanOrEqual(980);
-    expect(listLayout.railWidth).toBeGreaterThan(900);
+    expect(listLayout.cardWidth).toBeGreaterThanOrEqual(360);
+    expect(listLayout.cardWidth).toBeLessThanOrEqual(520);
+    expect(listLayout.railWidth).toBeGreaterThan(1000);
     expect(listLayout.visibleCardCount).toBeGreaterThanOrEqual(2);
     expect(listLayout.pageOverflows).toBe(false);
 

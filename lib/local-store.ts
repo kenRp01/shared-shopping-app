@@ -12,6 +12,11 @@ import {
   signUpFirebaseWithEmail,
   updateFirebaseDisplayName,
 } from "@/lib/firebase-client";
+import {
+  createLocalBackupPayload,
+  parseLocalBackupPayload,
+  type LocalBackupPayload,
+} from "@/lib/local-backup";
 import { buildReminderDigest } from "@/lib/reminders";
 import type {
   CreateItemPayload,
@@ -645,6 +650,108 @@ export async function continueAsGuest() {
   const starter = lists.find((list) => list.name === DEFAULT_STARTER_LISTS[0].name) ?? lists[0];
 
   return { user: profile, listId: starter.id };
+}
+
+export async function exportLocalBackup(viewer: UserProfile): Promise<LocalBackupPayload> {
+  const db = await getDb();
+  const [users, lists, members, items, reminderLogs, session] = await Promise.all([
+    db.getAll("users"),
+    db.getAll("lists"),
+    db.getAll("members"),
+    db.getAll("items"),
+    db.getAll("reminder_logs"),
+    db.get("session", "current"),
+  ]);
+
+  const accessibleListIds = new Set(
+    lists
+      .filter(
+        (list) =>
+          list.ownerUserId === viewer.id ||
+          members.some((member) => member.listId === list.id && member.userId === viewer.id),
+      )
+      .map((list) => list.id),
+  );
+  const backupLists = lists.filter((list) => accessibleListIds.has(list.id));
+  const backupMembers = members.filter((member) => accessibleListIds.has(member.listId));
+  const backupItems = items.filter((item) => accessibleListIds.has(item.listId));
+  const backupReminderLogs = reminderLogs.filter((log) => accessibleListIds.has(log.listId));
+
+  const requiredUserIds = new Set<string>([viewer.id]);
+  for (const list of backupLists) {
+    requiredUserIds.add(list.ownerUserId);
+  }
+  for (const member of backupMembers) {
+    requiredUserIds.add(member.userId);
+    requiredUserIds.add(member.invitedByUserId);
+  }
+  for (const item of backupItems) {
+    requiredUserIds.add(item.createdByUserId);
+    requiredUserIds.add(item.updatedByUserId);
+    if (item.purchasedByUserId) {
+      requiredUserIds.add(item.purchasedByUserId);
+    }
+  }
+
+  const backupUsers = users.filter((entry) => requiredUserIds.has(entry.id));
+  const backupSession = session?.userId === viewer.id ? session : { userId: viewer.id };
+
+  return createLocalBackupPayload({
+    users: backupUsers,
+    session: backupSession,
+    lists: backupLists,
+    members: backupMembers,
+    items: backupItems,
+    reminderLogs: backupReminderLogs,
+  });
+}
+
+export async function importLocalBackup(value: unknown) {
+  const backup = parseLocalBackupPayload(value);
+  const db = await getDb();
+  const stores = ["users", "session", "lists", "members", "items", "reminder_logs"] as const;
+  const clearTx = db.transaction(stores, "readwrite");
+
+  await Promise.all([
+    clearTx.objectStore("users").clear(),
+    clearTx.objectStore("session").clear(),
+    clearTx.objectStore("lists").clear(),
+    clearTx.objectStore("members").clear(),
+    clearTx.objectStore("items").clear(),
+    clearTx.objectStore("reminder_logs").clear(),
+  ]);
+  await clearTx.done;
+
+  const writeTx = db.transaction(stores, "readwrite");
+
+  await Promise.all([
+    ...backup.data.users.map((entry) => writeTx.objectStore("users").put(entry)),
+    ...backup.data.lists.map((entry) => writeTx.objectStore("lists").put(entry)),
+    ...backup.data.members.map((entry) => writeTx.objectStore("members").put(entry)),
+    ...backup.data.items.map((entry) => writeTx.objectStore("items").put(entry)),
+    ...backup.data.reminderLogs.map((entry) => writeTx.objectStore("reminder_logs").put(entry)),
+    backup.data.session
+      ? writeTx.objectStore("session").put(backup.data.session, "current")
+      : Promise.resolve(),
+  ]);
+  await writeTx.done;
+  await ensureListOrdering(db);
+  await ensureItemOrdering(db);
+
+  const sessionUser = backup.data.session
+    ? backup.data.users.find((entry) => entry.id === backup.data.session?.userId)
+    : null;
+  currentUserCache = sessionUser ? { user: toProfile(sessionUser), cachedAt: Date.now() } : null;
+
+  const firstList = [...backup.data.lists].sort(
+    (left, right) => left.sortOrder - right.sortOrder || left.createdAt.localeCompare(right.createdAt),
+  )[0];
+
+  return {
+    listId: firstList?.id ?? null,
+    listCount: backup.data.lists.length,
+    itemCount: backup.data.items.length,
+  };
 }
 
 export async function updateUserProfile(viewer: UserProfile, payload: { name: string }) {

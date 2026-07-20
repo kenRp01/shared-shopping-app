@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import QRCode from "qrcode";
 import { FullScreenAppLoader } from "@/components/app-loader";
-import { getCurrentUser, getListSettingsSnapshot, updateListSettings, addListMember, removeList, updateUserProfile, createListInvite, rotatePublicListToken } from "@/lib/local-store";
+import { getLocalBackupFileName } from "@/lib/local-backup";
+import { getCurrentUser, getListSettingsSnapshot, updateListSettings, addListMember, removeList, updateUserProfile, createListInvite, rotatePublicListToken, exportLocalBackup, importLocalBackup } from "@/lib/local-store";
 import { maskEmailAddress, privateMemberLabel } from "@/lib/privacy";
 import type { ListInvite, ShoppingListOverview, ShoppingListSnapshot, UserProfile } from "@/lib/types";
 
@@ -60,6 +61,7 @@ function friendlyInviteError(error: unknown) {
 
 export function ListSettingsClient({ listId }: Props) {
   const router = useRouter();
+  const backupFileInputRef = useRef<HTMLInputElement | null>(null);
   const [initialCache] = useState(() => consumeSettingsCache(listId));
   const [user, setUser] = useState<UserProfile | null>(initialCache?.user ?? null);
   const [snapshot, setSnapshot] = useState<ShoppingListSnapshot | null>(initialCache?.snapshot ?? null);
@@ -74,6 +76,7 @@ export function ListSettingsClient({ listId }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [theme, setTheme] = useState<AppTheme>("dark");
   const [isLoading, setIsLoading] = useState(!initialCache?.snapshot);
+  const [isBackupBusy, setIsBackupBusy] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   async function refresh(currentUser?: UserProfile | null) {
@@ -221,6 +224,50 @@ export function ListSettingsClient({ listId }: Props) {
 
   const canDeleteList = Boolean(user && snapshot.owner.id === user.id);
   const isGuestUser = user?.email.endsWith("@shareshopi.local") ?? false;
+  const backupBusy = isPending || isBackupBusy;
+
+  async function handleExportBackup() {
+    if (!user) {
+      setMessage("個人データを書き出すには、先に個人利用を開始してください。");
+      return;
+    }
+
+    setIsBackupBusy(true);
+    try {
+      const backup = await exportLocalBackup(user);
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = getLocalBackupFileName();
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage("個人データを書き出しました。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "個人データを書き出せませんでした。");
+    } finally {
+      setIsBackupBusy(false);
+    }
+  }
+
+  async function handleImportBackup(file: File) {
+    const confirmed = window.confirm("現在のこの端末の個人データを、バックアップ内容で置き換えます。続けますか？");
+    if (!confirmed) {
+      return;
+    }
+
+    setIsBackupBusy(true);
+    try {
+      const text = await file.text();
+      const result = await importLocalBackup(JSON.parse(text));
+      setMessage(`個人データを復元しました。リスト${result.listCount}件、商品${result.itemCount}件を読み込みました。`);
+      router.replace(result.listId ? `/lists/${result.listId}` : "/");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "個人データを読み込めませんでした。");
+    } finally {
+      setIsBackupBusy(false);
+    }
+  }
 
   return (
     <div className="page-grid settings-shell">
@@ -287,6 +334,44 @@ export function ListSettingsClient({ listId }: Props) {
           </button>
         </div>
       </form>
+
+      {isGuestUser ? (
+        <section className="settings-section settings-local-data-section">
+          <p className="settings-section-title">LOCAL DATA</p>
+          <div className="settings-card settings-local-data-card">
+            <div>
+              <strong>個人データ</strong>
+              <p>この端末の買い物リストをJSONで保存・復元できます。</p>
+            </div>
+            <div className="settings-backup-actions">
+              <button type="button" className="ghost-button compact-button" disabled={backupBusy} onClick={handleExportBackup}>
+                書き出す
+              </button>
+              <button
+                type="button"
+                className="primary-button compact-button"
+                disabled={backupBusy}
+                onClick={() => backupFileInputRef.current?.click()}
+              >
+                読み込む
+              </button>
+            </div>
+            <input
+              ref={backupFileInputRef}
+              className="settings-hidden-file"
+              type="file"
+              accept="application/json,.json"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                event.currentTarget.value = "";
+                if (file) {
+                  void handleImportBackup(file);
+                }
+              }}
+            />
+          </div>
+        </section>
+      ) : null}
 
       <form
         className="settings-section settings-preferences-section"

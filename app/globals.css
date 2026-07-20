@@ -1880,6 +1880,44 @@ html[data-theme="light"] .app-loader-dots span {
   background: rgba(240, 253, 244, 0.92);
 }
 
+.settings-local-data-card {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+}
+
+.settings-local-data-card strong {
+  display: block;
+  color: #123327;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.settings-local-data-card p {
+  margin: 5px 0 0;
+  color: rgba(18, 51, 39, 0.62);
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.6;
+}
+
+.settings-backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.settings-backup-actions .compact-button {
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+}
+
+.settings-hidden-file {
+  display: none;
+}
+
 .settings-section {
   display: grid;
   gap: 14px;
@@ -2315,8 +2353,13 @@ html[data-theme="light"] .app-loader-dots span {
 .settings-nav-card small,
 .settings-login-box p,
 .settings-member-row p,
-.settings-invite-card p {
+.settings-invite-card p,
+.settings-local-data-card p {
   color: rgba(255, 255, 255, 0.68);
+}
+
+.settings-local-data-card strong {
+  color: #ffffff;
 }
 
 .settings-nav-icon {
@@ -2568,8 +2611,13 @@ html[data-theme="light"] .app-loader-dots span {
 [data-theme="light"] .settings-nav-card small,
 [data-theme="light"] .settings-login-box p,
 [data-theme="light"] .settings-member-row p,
-[data-theme="light"] .settings-invite-card p {
+[data-theme="light"] .settings-invite-card p,
+[data-theme="light"] .settings-local-data-card p {
   color: rgba(18, 51, 39, 0.62);
+}
+
+[data-theme="light"] .settings-local-data-card strong {
+  color: #123327;
 }
 
 [data-theme="light"] .settings-nav-icon {
@@ -3786,57 +3834,62 @@ code {
 
 @media (min-width: 901px) {
   .page-shell:has(.list-carousel-stage) {
-    padding-inline: clamp(28px, 5vw, 72px);
+    padding-inline: clamp(32px, 5vw, 72px);
   }
 
   .page-shell:has(.list-carousel-stage) main {
     width: 100%;
-    max-width: min(1280px, calc(100vw - 96px));
+    max-width: min(1400px, calc(100vw - 96px));
   }
 
   .page-shell:has(.list-carousel-stage) .topbar {
-    width: min(100%, 1280px);
+    width: min(100%, 1400px);
     margin-inline: auto;
   }
 
   .list-carousel-stage .category-card-rail {
-    gap: 32px;
-    margin-inline: auto;
-    padding: 16px max(18px, calc((100% - 960px) / 2)) 32px;
-    scroll-padding-inline: max(18px, calc((100% - 960px) / 2));
+    --desktop-list-card-width: clamp(380px, 31vw, 460px);
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: var(--desktop-list-card-width);
+    gap: 28px;
+    margin: 0;
+    padding: 16px 6px 32px;
+    scroll-padding-inline: 6px;
   }
 
   .list-carousel-stage .category-card-rail::after {
     content: "";
-    flex: 0 0 max(18px, calc(100% - min(960px, 78vw)));
+    display: block;
   }
 
   .list-carousel-stage .category-pill-holder {
-    flex-basis: min(78vw, 960px);
+    min-width: 0;
   }
 
   .list-carousel-stage .category-card {
     width: 100%;
-    min-height: min(72vh, 700px);
-    padding: clamp(42px, 5vw, 64px);
-    border-radius: 44px;
+    min-height: clamp(500px, 58vh, 620px);
+    padding: clamp(34px, 3.2vw, 44px);
+    border-radius: 38px;
   }
 
   .list-carousel-stage .category-card-live {
-    min-height: min(72vh, 700px);
+    min-height: clamp(500px, 58vh, 620px);
   }
 
+  .list-carousel-stage .active-list-card-head h2,
   .list-carousel-stage .category-card-title {
-    font-size: clamp(2.4rem, 4.2vw, 4.2rem);
+    font-size: clamp(2rem, 2.4vw, 2.7rem);
   }
 
   .list-carousel-stage .item-row-modern,
   .list-carousel-stage .list-task-add-form {
-    max-width: 760px;
+    max-width: none;
   }
 
   .list-carousel-stage .category-carousel-dots {
-    right: max(32px, calc((100vw - 1180px) / 2 + 32px));
+    right: max(32px, calc((100vw - 1340px) / 2 + 32px));
   }
 
   .page-shell:has(.settings-shell) {
