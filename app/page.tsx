@@ -171,7 +171,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <AdSlot slot={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_SLOT_HOME} label="トップページ広告" />
+      <AdSlot placement="home" label="トップページ広告" />
     </div>
   );
 }

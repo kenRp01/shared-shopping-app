@@ -24,8 +24,14 @@ export default function PrivacyPage() {
         <h3>利用目的</h3>
         <p>リストの表示、共同編集、共有メンバーの判定、購入済み管理、リマインド通知の送信に利用します。</p>
 
+        <h3>広告とCookie</h3>
+        <p>
+          公開ページではGoogle AdSenseによる広告を表示する場合があります。広告配信事業者はCookieなどを利用し、
+          閲覧情報に基づいて広告を配信することがあります。
+        </p>
+        <p>対象地域の同意設定は、Google AdSenseの「プライバシーとメッセージ」で管理します。</p>
       </section>
-      <AdSlot slot={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_SLOT_LEGAL} label="プライバシーページ広告" />
+      <AdSlot placement="legal" label="プライバシーページ広告" />
     </div>
   );
 }

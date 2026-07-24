@@ -58,26 +58,27 @@ describe("Cloudflare Worker configuration", () => {
     const layout = readFileSync(new URL("../app/layout.tsx", import.meta.url), "utf8");
     const robots = readFileSync(new URL("../app/robots.ts", import.meta.url), "utf8");
     const sitemap = readFileSync(new URL("../app/sitemap.ts", import.meta.url), "utf8");
-    const adsTxt = readFileSync(new URL("../public/ads.txt", import.meta.url), "utf8");
+    const adsTxtRoute = readFileSync(new URL("../app/ads.txt/route.ts", import.meta.url), "utf8");
     const llmsTxt = readFileSync(new URL("../public/llms.txt", import.meta.url), "utf8");
-    const adsTxtGenerator = readFileSync(new URL("../scripts/generate-ads-txt.mjs", import.meta.url), "utf8");
     const about = readFileSync(new URL("../app/about/page.tsx", import.meta.url), "utf8");
     const login = readFileSync(new URL("../app/login/page.tsx", import.meta.url), "utf8");
     const privacy = readFileSync(new URL("../app/privacy/page.tsx", import.meta.url), "utf8");
+    const adConfigRoute = readFileSync(new URL("../app/api/ads/config/route.ts", import.meta.url), "utf8");
     const adsenseScript = readFileSync(new URL("../components/adsense-script.tsx", import.meta.url), "utf8");
     const adSlot = readFileSync(new URL("../components/ad-slot.tsx", import.meta.url), "utf8");
     const home = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
 
     expect(layout).toContain("metadataBase");
     expect(layout).toContain("openGraph");
-    expect(layout).toContain("<AdsenseScript />");
+    expect(layout).not.toContain("AdsenseScript");
     expect(robots).toContain("disallow");
     expect(robots).toContain("/app");
     expect(robots).toContain("/lists/");
     expect(robots).toContain("/llms.txt");
     expect(sitemap).toContain("/about");
     expect(sitemap).toContain("/privacy");
-    expect(adsTxt).toContain("Google AdSense publisher ID");
+    expect(adsTxtRoute).toContain("buildAdsTxt");
+    expect(adsTxtRoute).toContain("text/plain");
     expect(llmsTxt).toContain("ShareShopi");
     expect(llmsTxt).toContain("AI");
     expect(llmsTxt).toContain("Cloudflare D1");
@@ -86,12 +87,13 @@ describe("Cloudflare Worker configuration", () => {
     expect(home).toContain("seo-faq-strip");
     expect(about).toContain("AI検索向け要約");
     expect(about).toContain("FAQPage");
-    expect(adsTxtGenerator).toContain("GOOGLE_ADSENSE_PUBLISHER_ID");
-    expect(adsTxtGenerator).toContain("f08c47fec0942fa0");
     expect(login).toContain("export const metadata");
     expect(privacy).toContain("プライバシーポリシー");
+    expect(privacy).toContain("広告とCookie");
+    expect(adConfigRoute).toContain("getRuntimeMonetizationEnv");
+    expect(adConfigRoute).toContain("getAdSenseConfig");
     expect(adsenseScript).toContain("pagead2.googlesyndication.com");
-    expect(adSlot).toContain("data-ad-client");
+    expect(adSlot).toContain("/api/ads/config");
   });
 
   it("keeps operational documents aligned with Cloudflare D1 and Firebase", () => {

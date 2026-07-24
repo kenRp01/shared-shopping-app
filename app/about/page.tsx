@@ -131,7 +131,7 @@ export default function AboutPage() {
         </p>
       </section>
 
-      <AdSlot slot={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_SLOT_HOME} label="説明ページ広告" />
+      <AdSlot placement="home" label="説明ページ広告" />
     </div>
   );
 }

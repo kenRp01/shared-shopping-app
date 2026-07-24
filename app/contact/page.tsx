@@ -19,7 +19,7 @@ export default function ContactPage() {
 
         <ContactForm />
       </section>
-      <AdSlot slot={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_SLOT_LEGAL} label="問い合わせページ広告" />
+      <AdSlot placement="legal" label="問い合わせページ広告" />
     </div>
   );
 }

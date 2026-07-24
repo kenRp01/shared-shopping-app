@@ -29,7 +29,7 @@ export default function TermsPage() {
         <h3>変更</h3>
         <p>規約を変更した場合は、アプリ内またはREADME等で知らせます。</p>
       </section>
-      <AdSlot slot={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_SLOT_LEGAL} label="利用規約ページ広告" />
+      <AdSlot placement="legal" label="利用規約ページ広告" />
     </div>
   );
 }

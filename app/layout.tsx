@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { AdsenseScript } from "@/components/adsense-script";
 import { ChunkReloadGuard } from "@/components/chunk-reload-guard";
 import { Nav } from "@/components/nav";
 import "./globals.css";
@@ -83,7 +82,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="ja" data-theme="dark" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        <AdsenseScript />
       </head>
       <body>
         <ChunkReloadGuard />

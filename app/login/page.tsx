@@ -14,7 +14,7 @@ export default function LoginPage() {
   return (
     <>
       <AuthForm />
-      <AdSlot slot={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_SLOT_LOGIN} label="ログインページ広告" />
+      <AdSlot placement="login" label="ログインページ広告" />
     </>
   );
 }
