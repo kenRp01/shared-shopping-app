@@ -7,7 +7,7 @@ async function openGuestList(page: Page) {
   });
   await page.goto("/app");
   await expect(page).toHaveURL(/\/lists\/list_/, { timeout: 20_000 });
-  await expect(page.getByLabel("商品名")).toBeVisible();
+  await expect(page.locator('input[aria-label="商品名"]:visible')).toBeVisible();
   await expect(page.getByRole("heading", { name: "マイリスト", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "共有", exact: true })).toBeVisible();
   await expect(page.getByText("マイリストを開いています")).toHaveCount(0);
@@ -68,13 +68,20 @@ test.describe("Guest shopping list", () => {
 
     await openGuestList(page);
 
-    await page.getByLabel("商品名").fill(itemName);
-    await page.getByLabel("商品名").press("Enter");
+    await page.locator('input[aria-label="商品名"]:visible').fill(itemName);
+    await page.locator('input[aria-label="商品名"]:visible').press("Enter");
 
-    const itemButton = page.getByRole("button", { name: new RegExp(`${itemName} を編集`) });
+    const visibleListContent = page.locator(
+      ".desktop-list-content:visible, .category-card-active:visible",
+    );
+    const itemButton = visibleListContent.getByRole("button", {
+      name: new RegExp(`${itemName} を編集`),
+    });
     await expect(itemButton).toBeVisible();
 
-    await page.getByLabel(`${itemName} を購入済みにして一覧から外す`).click();
+    await visibleListContent
+      .getByLabel(`${itemName} を購入済みにして一覧から外す`)
+      .click();
     await expect(itemButton).toHaveCount(0, { timeout: 10_000 });
     await page.reload();
     await expect(itemButton).toHaveCount(0, { timeout: 10_000 });
@@ -84,12 +91,19 @@ test.describe("Guest shopping list", () => {
     const itemName = `E2E編集${Date.now()}`;
 
     await openGuestList(page);
-    await page.getByLabel("商品名").fill(itemName);
-    await page.getByLabel("商品名").press("Enter");
-    await page.getByRole("button", { name: new RegExp(`${itemName} を編集`) }).click();
+    await page.locator('input[aria-label="商品名"]:visible').fill(itemName);
+    await page.locator('input[aria-label="商品名"]:visible').press("Enter");
+    const visibleListContent = page.locator(
+      ".desktop-list-content:visible, .category-card-active:visible",
+    );
+    await visibleListContent
+      .getByRole("button", { name: new RegExp(`${itemName} を編集`) })
+      .click();
 
-    const metrics = await page.locator(".category-card-active .item-row-modern:has(.item-edit-form)").evaluate((row) => {
-      const card = row.closest(".category-card");
+    const metrics = await visibleListContent
+      .locator(".item-row-modern:has(.item-edit-form)")
+      .evaluate((row) => {
+      const card = row.closest(".desktop-list-content, .category-card");
       const form = row.querySelector(".item-edit-form");
       const top = row.querySelector(".item-row-top");
       const firstInput = form?.querySelector("input");
@@ -118,36 +132,49 @@ test.describe("Guest shopping list", () => {
     expect(metrics.columns.split(" ").length).toBe(1);
   });
 
-  test("uses a desktop workspace without stretching the mobile layout", async ({ page }, testInfo) => {
+  test("uses a desktop workspace with list navigation, items, and summary", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "chromium", "PCレイアウト専用");
 
     await openGuestList(page);
 
-    const listLayout = await page.locator(".list-carousel-stage").evaluate((stage) => {
-      const main = stage.closest("main");
-      const rail = stage.querySelector(".category-card-rail");
-      const cards = Array.from(stage.querySelectorAll(".category-card"));
-      const firstCard = cards[0];
+    await expect(page.locator(".desktop-list-sidebar")).toBeVisible();
+    await expect(page.locator(".desktop-list-main")).toBeVisible();
+    await expect(page.locator(".desktop-list-summary")).toBeVisible();
+    await expect(page.locator(".desktop-list-content")).toBeVisible();
+    await expect(page.locator(".mobile-list-carousel")).toBeHidden();
+    await expect(page.getByRole("heading", { name: "今日の買い物" })).toBeVisible();
+
+    const desktopContent = page.locator(".desktop-list-content");
+    const desktopItemInput = desktopContent.getByLabel("商品名");
+    await desktopItemInput.fill("牛乳");
+    await desktopItemInput.press("Enter");
+    await expect(desktopContent.getByText("牛乳", { exact: true })).toBeVisible();
+
+    const listLayout = await page.locator(".detail-shell").evaluate((shell) => {
+      const sidebar = shell.querySelector(".desktop-list-sidebar");
+      const content = shell.querySelector(".desktop-list-main");
+      const contentPanel = shell.querySelector(".desktop-list-content");
+      const summary = shell.querySelector(".desktop-list-summary");
+      const item = contentPanel?.querySelector(".item-row-modern");
       const viewportWidth = document.documentElement.clientWidth;
-      const visibleCards = cards.filter((card) => {
-        const rect = card.getBoundingClientRect();
-        return rect.right > 0 && rect.left < viewportWidth;
-      });
 
       return {
-        mainWidth: main?.getBoundingClientRect().width ?? 0,
-        cardWidth: firstCard?.getBoundingClientRect().width ?? 0,
-        railWidth: rail?.getBoundingClientRect().width ?? 0,
-        visibleCardCount: visibleCards.length,
+        columns: getComputedStyle(shell).gridTemplateColumns.split(" ").filter(Boolean).length,
+        sidebarWidth: sidebar?.getBoundingClientRect().width ?? 0,
+        contentWidth: content?.getBoundingClientRect().width ?? 0,
+        contentBackground: contentPanel ? getComputedStyle(contentPanel).backgroundColor : "",
+        itemWidth: item?.getBoundingClientRect().width ?? 0,
+        summaryWidth: summary?.getBoundingClientRect().width ?? 0,
         pageOverflows: document.documentElement.scrollWidth > viewportWidth,
       };
     });
 
-    expect(listLayout.mainWidth).toBeGreaterThan(1000);
-    expect(listLayout.cardWidth).toBeGreaterThanOrEqual(360);
-    expect(listLayout.cardWidth).toBeLessThanOrEqual(520);
-    expect(listLayout.railWidth).toBeGreaterThan(1000);
-    expect(listLayout.visibleCardCount).toBeGreaterThanOrEqual(2);
+    expect(listLayout.columns).toBe(3);
+    expect(listLayout.sidebarWidth).toBeGreaterThanOrEqual(220);
+    expect(listLayout.contentWidth).toBeGreaterThan(500);
+    expect(listLayout.contentBackground).not.toBe("rgba(0, 0, 0, 0)");
+    expect(listLayout.itemWidth).toBeGreaterThan(450);
+    expect(listLayout.summaryWidth).toBeGreaterThanOrEqual(260);
     expect(listLayout.pageOverflows).toBe(false);
 
     const listPath = new URL(page.url()).pathname;
@@ -177,13 +204,14 @@ test.describe("Guest shopping list", () => {
     await expect(page.getByRole("link", { name: "マイリスト", exact: true })).toBeVisible();
   });
 
-  test("switches lists by horizontal scrolling", async ({ page }) => {
+  test("switches lists by horizontal scrolling", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile-chrome", "モバイルの横スワイプ専用");
     const itemName = `E2Eパン${Date.now()}`;
     await openGuestList(page);
     await expect(page.getByText("Swipe lists")).toHaveCount(0);
     await expect(page.getByText("Add your shopping")).toHaveCount(0);
-    await page.getByLabel("商品名").fill(itemName);
-    await page.getByLabel("商品名").press("Enter");
+    await page.locator('input[aria-label="商品名"]:visible').fill(itemName);
+    await page.locator('input[aria-label="商品名"]:visible').press("Enter");
     await expect(page.getByRole("button", { name: new RegExp(`${itemName} を編集`) })).toBeVisible();
 
     const cardBackgrounds = await page.locator(".category-card").evaluateAll((cards) =>
@@ -254,14 +282,16 @@ test.describe("Guest shopping list", () => {
     await expect(page).toHaveURL(/\/lists\/list_/);
   });
 
-  test("switches lists from carousel indicators after creating another list", async ({ page }) => {
+  test("switches lists from carousel indicators after creating another list", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile-chrome", "モバイルのカルーセル専用");
     const listName = `E2Eリスト${Date.now()}`;
 
     await openGuestList(page);
     await page.getByRole("button", { name: "新しいリストを作成" }).click();
-    await page.getByPlaceholder("新しいリスト").fill(listName);
+    const newListInput = page.locator('input[aria-label="新しいリスト"]:visible');
+    await newListInput.fill(listName);
     await expect(page.getByRole("button", { name: "作成" })).toHaveCount(0);
-    await page.getByPlaceholder("新しいリスト").press("Enter");
+    await newListInput.press("Enter");
 
     await expect(page.getByRole("heading", { name: listName, exact: true })).toBeVisible({ timeout: 10_000 });
 

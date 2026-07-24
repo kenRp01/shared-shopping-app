@@ -19,6 +19,7 @@ import {
   reorderLists,
   updateItem,
 } from "@/lib/local-store";
+import { maskEmailAddress, privateMemberLabel } from "@/lib/privacy";
 import type { CreateItemPayload, ShoppingItem, ShoppingItemView, ShoppingList, ShoppingListOverview, ShoppingListSnapshot, UserProfile } from "@/lib/types";
 import { cn, formatDate, formatRelativeDue, makeId, todayKey } from "@/lib/utils";
 
@@ -561,6 +562,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
   const activeCategoryId = optimisticListId ?? activeListId ?? snapshot.list.id;
   const hasSharedContext = snapshot.list.visibility !== "private" || snapshot.members.some((member) => member.id !== snapshot.owner.id);
   const canEditList = snapshot.permission === "edit" && !publicToken;
+  const todayItems = pendingItems.filter((item) => item.dueDate === todayKey());
   const renderPreviewListContent = (category: ShoppingListOverview) => {
     const previewItems = getCategoryPreviewItems(category.id).slice(0, 6);
     const shouldShowPreviewOwner = category.visibility !== "private";
@@ -600,7 +602,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
       </div>
     );
   };
-  const activeListContent = (
+  const renderActiveListContent = () => (
     <div className="item-list item-list-stack">
       {pendingItems.length === 0 ? <p className="empty-state">No items</p> : null}
       {pendingItems.map((item) => (
@@ -779,10 +781,131 @@ export function ListDetailClient({ listId, publicToken }: Props) {
       ) : null}
     </div>
   );
+  const createCategory = () => {
+    startTransition(async () => {
+      let optimisticListId: string | null = null;
+      try {
+        if (!user) {
+          throw new Error("ログインが必要です。");
+        }
+        const name = categoryFormName.trim() || "マイリスト";
+        const optimisticList = makeOptimisticList(name, user);
+        optimisticListId = optimisticList.id;
+        const optimisticOverview = toOverviewFromList(optimisticList, user);
+        const optimisticSnapshot: ShoppingListSnapshot = {
+          list: optimisticList,
+          owner: user,
+          members: [{ ...user, role: "owner" }],
+          items: [],
+          permission: "edit",
+        };
+        const nextCategories = [...categories, optimisticOverview];
+        shouldScrollToActiveRef.current = true;
+        setCategories(nextCategories);
+        setSnapshot(optimisticSnapshot);
+        setActiveListId(optimisticList.id);
+        setOptimisticListId(null);
+        setCategoryFormName("");
+        setShowCategoryCreate(false);
+        setMessage(null);
+        window.history.pushState(null, "", `/lists/${optimisticList.id}`);
+
+        const created = await createList(user, {
+          ...DEFAULT_LIST_FORM,
+          name,
+          plannedDate: null,
+          visibility: "private",
+        });
+        const savedOverview = toOverviewFromList(created, user);
+        const savedSnapshot: ShoppingListSnapshot = {
+          ...optimisticSnapshot,
+          list: created,
+        };
+        const savedCategories = nextCategories.map((category) => (category.id === optimisticList.id ? savedOverview : category));
+        setCategories(savedCategories);
+        setSnapshot(savedSnapshot);
+        setActiveListId(created.id);
+        detailCache.delete(detailCacheKey(user.id, optimisticList.id));
+        detailCache.set(detailCacheKey(user.id, created.id), {
+          snapshot: savedSnapshot,
+          categories: savedCategories,
+          cachedAt: Date.now(),
+        });
+        window.history.replaceState(null, "", `/lists/${created.id}`);
+      } catch (error) {
+        if (optimisticListId) {
+          setCategories((current) => current.filter((category) => category.id !== optimisticListId));
+          const fallback = categories[0];
+          if (fallback) {
+            switchList(fallback.id);
+          }
+        }
+        setMessage(error instanceof Error ? error.message : "リストを作成できませんでした。");
+      }
+    });
+  };
 
   return (
-    <div className="page-grid detail-shell">
-      <section className={cn("panel list-section-panel list-board-panel list-carousel-stage", isResolvingList && "list-section-panel-loading")}>
+    <div className="page-grid detail-shell desktop-list-workspace">
+      <aside className="desktop-list-sidebar" aria-label="リスト">
+        <h2>リスト</h2>
+        <nav className="desktop-list-nav">
+          {categories.map((category, index) => (
+            <Link
+              key={category.id}
+              href={`/lists/${category.id}`}
+              className={cn("desktop-list-nav-item", category.id === activeCategoryId && "desktop-list-nav-item-active")}
+              onClick={(event) => {
+                event.preventDefault();
+                switchList(category.id);
+              }}
+            >
+              <span className={cn("desktop-list-nav-icon", `desktop-list-nav-icon-${index % 5}`)}>
+                <ListIcon />
+              </span>
+              <span>{category.name}</span>
+            </Link>
+          ))}
+        </nav>
+        {canEditList ? (
+          <button type="button" className="desktop-new-list-button" onClick={() => setShowCategoryCreate(true)}>
+            <PlusIcon />
+            新しいリスト
+          </button>
+        ) : null}
+      </aside>
+
+      <section className={cn("panel list-section-panel list-board-panel list-carousel-stage desktop-list-main", isResolvingList && "list-section-panel-loading")}>
+        <div className="desktop-list-content">
+          <div className="desktop-list-content-head">
+            <h1>{snapshot.list.name}</h1>
+            {!publicToken ? (
+              <Link
+                href={`/lists/${snapshot.list.id}/settings`}
+                className="desktop-list-settings-link"
+                aria-label="現在のリスト設定"
+                onClick={cacheSettingsView}
+              >
+                <MenuIcon />
+              </Link>
+            ) : null}
+          </div>
+          {renderActiveListContent()}
+          {showCategoryCreate && canEditList ? (
+            <form className="desktop-category-create-form" action={createCategory}>
+              <input
+                autoFocus
+                value={categoryFormName}
+                placeholder="新しいリスト名"
+                aria-label="新しいリスト"
+                onChange={(event) => setCategoryFormName(event.target.value)}
+              />
+              <button type="submit" className="primary-button compact-button">作成</button>
+            </form>
+          ) : null}
+        </div>
+
+        <div className="mobile-list-carousel">
         {categories.length ? (
           <div className="category-strip-wrap">
             <div className="category-toolbar">
@@ -868,7 +991,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
                             </Link>
                           ) : null}
                         </div>
-                        {category.id === snapshot.list.id ? activeListContent : renderPreviewListContent(category)}
+                        {category.id === snapshot.list.id ? renderActiveListContent() : renderPreviewListContent(category)}
                       </div>
                     ) : (
                       <Link
@@ -914,69 +1037,7 @@ export function ListDetailClient({ listId, publicToken }: Props) {
             {showCategoryCreate && snapshot.permission === "edit" && !publicToken ? (
               <form
                 className="category-create-inline"
-                action={() => {
-                  startTransition(async () => {
-                    let optimisticListId: string | null = null;
-                    try {
-                      if (!user) {
-                        throw new Error("ログインが必要です。");
-                      }
-                      const name = categoryFormName.trim() || "マイリスト";
-                      const optimisticList = makeOptimisticList(name, user);
-                      optimisticListId = optimisticList.id;
-                      const optimisticOverview = toOverviewFromList(optimisticList, user);
-                      const optimisticSnapshot: ShoppingListSnapshot = {
-                        list: optimisticList,
-                        owner: user,
-                        members: [{ ...user, role: "owner" }],
-                        items: [],
-                        permission: "edit",
-                      };
-                      const nextCategories = [...categories, optimisticOverview];
-                      shouldScrollToActiveRef.current = true;
-                      setCategories(nextCategories);
-                      setSnapshot(optimisticSnapshot);
-                      setActiveListId(optimisticList.id);
-                      setOptimisticListId(null);
-                      setCategoryFormName("");
-                      setShowCategoryCreate(false);
-                      setMessage(null);
-                      window.history.pushState(null, "", `/lists/${optimisticList.id}`);
-
-                      const created = await createList(user, {
-                        ...DEFAULT_LIST_FORM,
-                        name,
-                        plannedDate: null,
-                        visibility: "private",
-                      });
-                      const savedOverview = toOverviewFromList(created, user);
-                      const savedSnapshot: ShoppingListSnapshot = {
-                        ...optimisticSnapshot,
-                        list: created,
-                      };
-                      const savedCategories = nextCategories.map((category) => (category.id === optimisticList.id ? savedOverview : category));
-                      setCategories(savedCategories);
-                      setSnapshot(savedSnapshot);
-                      setActiveListId(created.id);
-                      detailCache.delete(detailCacheKey(user.id, optimisticList.id));
-                      detailCache.set(detailCacheKey(user.id, created.id), {
-                        snapshot: savedSnapshot,
-                        categories: savedCategories,
-                        cachedAt: Date.now(),
-                      });
-                      window.history.replaceState(null, "", `/lists/${created.id}`);
-                    } catch (error) {
-                      if (optimisticListId) {
-                        setCategories((current) => current.filter((category) => category.id !== optimisticListId));
-                        const fallback = categories[0];
-                        if (fallback) {
-                          switchList(fallback.id);
-                        }
-                      }
-                      setMessage(error instanceof Error ? error.message : "リストを作成できませんでした。");
-                    }
-                  });
-                }}
+                action={createCategory}
               >
                 <input
                   value={categoryFormName}
@@ -1002,7 +1063,49 @@ export function ListDetailClient({ listId, publicToken }: Props) {
             ) : null}
           </div>
         ) : null}
+        </div>
       </section>
+
+      <aside className="desktop-list-summary" aria-label="リストの概要">
+        <section className="desktop-summary-section desktop-today-summary">
+          <div className="desktop-summary-heading">
+            <h2>今日の買い物</h2>
+            <span className="desktop-summary-icon"><BasketIcon /></span>
+          </div>
+          <strong className="desktop-summary-count">{todayItems.length}<small>点</small></strong>
+          <p>今日が期限のアイテム</p>
+        </section>
+
+        <section className="desktop-summary-section desktop-member-summary">
+          <div className="desktop-summary-heading">
+            <h2>共有メンバー</h2>
+            <span className="desktop-summary-icon"><MembersIcon /></span>
+          </div>
+          <div className="desktop-member-list">
+            {snapshot.members.map((member, index) => {
+              const isCurrentMember = member.id === user?.id;
+              return (
+                <div className="desktop-member-row" key={member.id}>
+                  <span className={cn("desktop-member-avatar", `desktop-member-avatar-${index % 4}`)} aria-hidden="true">
+                    {privateMemberLabel(index, isCurrentMember).slice(0, 1)}
+                  </span>
+                  <span className="desktop-member-copy">
+                    <strong>{privateMemberLabel(index, isCurrentMember)}</strong>
+                    <small>{maskEmailAddress(member.email)}</small>
+                  </span>
+                  {member.role === "owner" ? <span className="desktop-owner-tag">オーナー</span> : null}
+                </div>
+              );
+            })}
+          </div>
+          {canEditList ? (
+            <Link href={`/lists/${snapshot.list.id}/settings`} className="desktop-add-member-link" onClick={cacheSettingsView}>
+              <MembersIcon />
+              メンバーを追加
+            </Link>
+          ) : null}
+        </section>
+      </aside>
     </div>
   );
 }
@@ -1210,6 +1313,38 @@ function MenuIcon() {
       <path d="M5 7h14" />
       <path d="M5 12h14" />
       <path d="M5 17h14" />
+    </svg>
+  );
+}
+
+function ListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 8.5h12" />
+      <path d="M6 12h12" />
+      <path d="M6 15.5h8" />
+      <path d="M4 5.5h16v13H4z" />
+    </svg>
+  );
+}
+
+function BasketIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m8 10 2-5" />
+      <path d="m16 10-2-5" />
+      <path d="M4 10h16l-1.4 9H5.4z" />
+      <path d="M9 13v3M15 13v3" />
+    </svg>
+  );
+}
+
+function MembersIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3.5 18c.5-3.1 2.4-5 5.5-5s5 1.9 5.5 5" />
+      <path d="M16 6.5a2.5 2.5 0 0 1 0 4.8M16 13c2.6.2 4 1.7 4.5 4" />
     </svg>
   );
 }
